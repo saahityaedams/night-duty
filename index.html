@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content"
+    />
+    <meta name="theme-color" content="#030406" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Night Duty" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" href="data:," />
+    <title>Night Duty</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #030406;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* On phones the stage is the whole screen, edge to edge, under the notch and home bar. */
+      #stage {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: #030406;
+      }
+      #game {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+      }
+      /* On laptops and desktops the stage becomes a portrait phone, so the view matches hers exactly. */
+      @media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 3/4) {
+        body {
+          background: radial-gradient(ellipse at 50% 40%, #0c0f15 0%, #020203 70%);
+        }
+        #stage {
+          inset: auto;
+          top: 50%;
+          left: 50%;
+          height: min(94vh, 932px);
+          aspect-ratio: 430 / 932;
+          transform: translate(-50%, -50%);
+          border-radius: 44px;
+          box-shadow:
+            0 0 0 10px #0b0c0e,
+            0 0 0 11px #24262b,
+            0 30px 80px rgba(0, 0, 0, 0.8);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="game"></canvas></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

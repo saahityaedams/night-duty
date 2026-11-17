@@ -1,0 +1,27 @@
+{
+  "name": "night-duty",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "blender": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python",
+    "deploy:preview": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "postprocessing": "6.39.6",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/three": "0.187.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "wrangler": "4.157.0"
+  }
+}
