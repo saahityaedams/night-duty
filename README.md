@@ -6,6 +6,31 @@ A short destruction game for phones. It's 3 a.m. in a hospital duty room, the pa
 
 Best on a recent phone in portrait. Add it to the home screen to play offline.
 
+<table>
+  <tr>
+    <td><img src="docs/screens/room.jpg" width="240" alt="The duty room at 3:47 a.m.: a desk with a monitor, coffee cups and paperwork in front of a rainy window"></td>
+    <td><img src="docs/screens/smashed.jpg" width="240" alt="Close on the desk after a few cups have been broken, shards scattered across the wood"></td>
+    <td><img src="docs/screens/printer.jpg" width="240" alt="The printer under a whiteboard duty roster"></td>
+  </tr>
+  <tr>
+    <td align="center">3:47 a.m.</td>
+    <td align="center">Cups</td>
+    <td align="center">The printer</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/popups.jpg" width="240" alt="The hospital system on the monitor buried under error pop-ups"></td>
+    <td><img src="docs/screens/finale.jpg" width="240" alt="A sledgehammer landing on the cracked monitor"></td>
+    <td><img src="docs/screens/dawn.jpg" width="240" alt="Dawn light over the wrecked, paper-strewn desk"></td>
+  </tr>
+  <tr>
+    <td align="center">Pop-ups</td>
+    <td align="center">The hammer</td>
+    <td align="center">Dawn</td>
+  </tr>
+</table>
+
+<p align="center"><img src="docs/screens/ending.jpg" width="240" alt="End-of-shift tally: cups broken, pages shredded, pop-ups closed, Pending 0"></p>
+
 ## Stack
 
 - [Three.js](https://threejs.org/) (WebGL2) for rendering, [Rapier](https://rapier.rs/) for physics, built with Vite and TypeScript
