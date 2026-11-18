@@ -290,9 +290,13 @@ export class Arc {
       })
       .filter((x) => x.c)
       .sort((a, b) => a.c!.translation().x ** 2 + a.c!.translation().z ** 2 - (b.c!.translation().x ** 2 + b.c!.translation().z ** 2));
-    remaining.forEach(({ t, c }, i) => {
+    remaining.forEach(({ t }, i) => {
       setTimeout(() => {
-        const p = c!.translation();
+        // The shockwave may have broken it (or torn this part off) since it was scheduled.
+        if (d.objects.damage.isBroken(t)) return;
+        const live = t.colliders.find((col) => world.getCollider(col.handle) === col);
+        if (!live) return;
+        const p = live.translation();
         d.objects.damage.apply(t, new THREE.Vector3(p.x, p.y, p.z + 0.05), 5000);
       }, 150 + i * 160);
     });
