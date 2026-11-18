@@ -70,6 +70,15 @@ export class Breakables {
     private readonly particles: Particles,
   ) {
     physics.onHit((hit) => this.handleHit(hit));
+    // Anything that falls out of the world is removed cleanly.
+    physics.onLost((body, object) => {
+      const e = this.debris.removeBody(body);
+      for (let i = 0; i < body.numColliders(); i++) this.shardColliders.delete(body.collider(i).handle);
+      for (const [h, entry] of this.byCollider) if (entry.body === body) (this.byCollider.delete(h), (entry.broken = true));
+      this.physics.removeBody(body);
+      object.removeFromParent();
+      e?.mesh.geometry.dispose();
+    });
     this.debris = new Debris(scene, bisqueMaterial);
   }
 
@@ -116,6 +125,15 @@ export class Breakables {
       }
     }
     return false;
+  }
+
+  /** Clears debris from a spot (e.g. where a new object is about to appear). */
+  clearArea(x: number, z: number, radius: number): void {
+    for (const { mesh, body } of this.debris.removeNear(x, z, radius)) {
+      for (let i = 0; i < body.numColliders(); i++) this.shardColliders.delete(body.collider(i).handle);
+      this.physics.removeBody(body);
+      mesh.geometry.dispose();
+    }
   }
 
   /** Removes the oldest shards beyond `max`, so long sessions stay fast. */

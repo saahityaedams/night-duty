@@ -18,6 +18,8 @@ export interface PhysicsBinding {
   settling: boolean;
   /** Held by the player's finger: no settle damping. */
   held: boolean;
+  /** Seconds spent awake while barely moving (for the sleep watchdog). */
+  slowFor: number;
 }
 
 /** A contact whose force crossed a collider's threshold during one physics step. */
@@ -41,6 +43,14 @@ export interface ContactHit {
 const SETTLE_HORIZONTAL_SPEED = 1.0; // m/s
 const SETTLE_VERTICAL_SPEED = 0.3; // m/s
 const SETTLE_DAMPING = 6;
+/**
+ * Watchdog: thin shards occasionally wedge slightly into a surface and jitter or spin in place,
+ * so the solver never lets them sleep. Anything barely translating for this long is put to sleep.
+ */
+const WATCHDOG_SPEED = 0.15; // m/s
+const WATCHDOG_SECONDS = 4;
+/** Bodies that fall below this height have left the world and are removed. */
+const KILL_HEIGHT = -2;
 
 export class Physics {
   readonly world: RAPIER.World;
@@ -48,6 +58,7 @@ export class Physics {
   private accumulator = 0;
   private readonly bindings = new Map<number, PhysicsBinding>(); // by body handle
   private readonly hitListeners: ((hit: ContactHit) => void)[] = [];
+  private readonly lostListeners: ((body: RAPIER.RigidBody, object: THREE.Object3D) => void)[] = [];
 
   private constructor(readonly rapier: Rapier) {
     this.world = new rapier.World({ x: 0, y: -9.81, z: 0 });
@@ -69,6 +80,7 @@ export class Physics {
       baseAngularDamping: body.angularDamping(),
       settling: false,
       held: false,
+      slowFor: 0,
     };
     this.bindings.set(body.handle, b);
     return b;
@@ -88,6 +100,11 @@ export class Physics {
     this.hitListeners.push(cb);
   }
 
+  /** Called when a body falls out of the world; the listener is responsible for removing it. */
+  onLost(cb: (body: RAPIER.RigidBody, object: THREE.Object3D) => void): void {
+    this.lostListeners.push(cb);
+  }
+
   /** Advances the simulation by elapsed time (seconds, already scaled for slow motion). */
   step(dt: number): void {
     this.accumulator = Math.min(this.accumulator + dt, PHYSICS_DT * MAX_STEPS_PER_FRAME);
@@ -96,7 +113,7 @@ export class Physics {
       this.accumulator -= PHYSICS_DT;
       this.drainEvents();
     }
-    this.settle();
+    this.settle(dt);
     this.sync();
   }
 
@@ -130,16 +147,37 @@ export class Physics {
     for (const h of hits) for (const cb of this.hitListeners) cb(h);
   }
 
-  private settle(): void {
+  private settle(dt: number): void {
+    const lost: PhysicsBinding[] = [];
     for (const b of this.bindings.values()) {
       const { body } = b;
       if (body.isSleeping() || !body.isDynamic()) continue;
+      if (body.translation().y < KILL_HEIGHT) {
+        lost.push(b);
+        continue;
+      }
       const v = body.linvel();
+      const speed2 = v.x * v.x + v.y * v.y + v.z * v.z;
+      b.slowFor = !b.held && speed2 < WATCHDOG_SPEED ** 2 ? b.slowFor + dt : 0;
+      if (b.slowFor > WATCHDOG_SECONDS) {
+        body.setLinvel({ x: 0, y: 0, z: 0 }, false);
+        body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+        body.sleep();
+        b.slowFor = 0;
+        continue;
+      }
       const slow = !b.held && v.x * v.x + v.z * v.z < SETTLE_HORIZONTAL_SPEED ** 2 && Math.abs(v.y) < SETTLE_VERTICAL_SPEED;
       if (slow !== b.settling) {
         b.settling = slow;
         body.setLinearDamping(slow ? SETTLE_DAMPING : b.baseLinearDamping);
         body.setAngularDamping(slow ? SETTLE_DAMPING : b.baseAngularDamping);
+      }
+    }
+    for (const b of lost) {
+      if (this.lostListeners.length) for (const cb of this.lostListeners) cb(b.body, b.object);
+      else {
+        this.removeBody(b.body);
+        b.object.removeFromParent();
       }
     }
   }

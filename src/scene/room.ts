@@ -70,7 +70,7 @@ export function createRoom(): Room {
   const edgeMat = new THREE.MeshStandardMaterial({ color: 0x8a7a66, roughness: 0.55 });
   const powderCoat = new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.55, metalness: 0.4 });
   const aluminium = new THREE.MeshStandardMaterial({ color: 0x6d7278, roughness: 0.55, metalness: 1.0 });
-  const sillMat = new THREE.MeshStandardMaterial({ color: 0xcfcac2, roughness: 0.35 });
+  const sillMat = new THREE.MeshStandardMaterial({ color: 0x77736d, roughness: 0.6 });
   const skirting = new THREE.MeshStandardMaterial({ color: 0x55534f, roughness: 0.6 });
 
   // --- Floor ---------------------------------------------------------------------------------

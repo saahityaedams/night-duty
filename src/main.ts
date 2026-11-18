@@ -31,6 +31,8 @@ interface TestHooks {
   breakAll(force?: number): number;
   counts(): { intact: number; breaks: number; shards: number };
   audio(): { state: string; loaded: boolean; samples: Record<string, number> };
+  /** Sets the window's night-to-dawn grade (0..1), for previews. */
+  setDawn(v: number): void;
   /** Normalized screen positions (0..1) of intact mugs' centres. */
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
@@ -54,6 +56,7 @@ const hooks: TestHooks = {
   counts: () => ({ intact: 0, breaks: 0, shards: 0 }),
   mugScreenPositions: () => [],
   audio: () => ({ state: 'none', loaded: false, samples: {} }),
+  setDawn: () => {},
   awakeBodies: () => [],
 };
 window.__nd = hooks;
@@ -186,6 +189,8 @@ async function main() {
   };
 
   const spawnRound = (animate: boolean) => {
+    // Debris lying where a mug will appear would overlap its collider and jitter forever.
+    for (const [x, z] of cupSpots) breakables.clearArea(x, z, 0.09);
     cupSpots.forEach(([x, z, rot], i) => spawnMug(x, z, rot + round * 0.7, GLAZES[(i + round * 2) % GLAZES.length], animate));
     round++;
   };
@@ -317,6 +322,7 @@ async function main() {
   };
   hooks.counts = () => ({ intact: breakables.intactCount, breaks: breakables.breaks, shards: breakables.shardCount });
   hooks.audio = () => audio.info();
+  hooks.setDawn = (v) => room.window.setDawn(v);
   hooks.mugScreenPositions = () => {
     const out: { x: number; y: number }[] = [];
     for (const body of new Set(pickable.values())) {

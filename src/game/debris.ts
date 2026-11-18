@@ -51,6 +51,30 @@ export class Debris {
     return out;
   }
 
+  /** Removes the entry for one body, if present. */
+  removeBody(body: RAPIER.RigidBody): { mesh: THREE.Mesh; body: RAPIER.RigidBody } | null {
+    const i = this.entries.findIndex((e) => e.body === body);
+    if (i < 0) return null;
+    const [e] = this.entries.splice(i, 1);
+    if (e.merged) this.markDirty(e.glaze);
+    this.scene.remove(e.mesh);
+    return e;
+  }
+
+  /** Removes and returns entries whose shard lies within `radius` of (x, z) horizontally. */
+  removeNear(x: number, z: number, radius: number): { mesh: THREE.Mesh; body: RAPIER.RigidBody }[] {
+    const out: Entry[] = [];
+    for (let i = this.entries.length - 1; i >= 0; i--) {
+      const t = this.entries[i].body.translation();
+      if ((t.x - x) ** 2 + (t.z - z) ** 2 < radius * radius) out.push(...this.entries.splice(i, 1));
+    }
+    for (const e of out) {
+      if (e.merged) this.markDirty(e.glaze);
+      this.scene.remove(e.mesh);
+    }
+    return out;
+  }
+
   update(dt: number): void {
     for (const e of this.entries) {
       const asleep = e.body.isSleeping();

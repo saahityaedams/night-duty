@@ -23,6 +23,13 @@ Cut into one-shots, trimmed, faded, normalised and re-encoded for the game (`pub
 | clink_01 | "Mono_Plates1.wav" by DCLV, https://freesound.org/people/DCLV/sounds/404523/ |
 | clink_02 | "Small Crack" by eben-frostey, https://freesound.org/people/eben-frostey/sounds/608677/ |
 
+## Window view (rawpixel, CC0 via Openverse)
+
+Re-encoded at 1024px and graded in the window shader (`public/textures/city/`). Both are listed as CC0 on Openverse and as "free public domain CC0" on rawpixel. The rawpixel pages sit behind a bot check, so the licence was confirmed through Openverse.
+
+- `night_plate_1k.jpg`: night city view from a high window, https://www.rawpixel.com/image/3293602/free-photo-image-vancouver-skyline-canada-cityscape-aerial-view
+- `dawn_plate_1k.jpg`: "City view dawn", https://www.rawpixel.com/image/6016782/city-view-dawn-free-public-domain-cc0-photo
+
 ## Textures (Poly Haven, CC0)
 
 - `white_oak_veneer`: https://polyhaven.com/a/white_oak_veneer
@@ -31,4 +38,4 @@ Cut into one-shots, trimmed, faded, normalised and re-encoded for the game (`pub
 
 ## Generated in code
 
-The rain, city, monitor UI, paperwork, mugs, keyboard, fracture shards and ambience are procedural.
+The rain on the glass, monitor UI, paperwork, mugs, keyboard, fracture shards and ambience are procedural.
