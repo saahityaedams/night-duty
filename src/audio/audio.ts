@@ -113,11 +113,12 @@ export class AudioEngine {
   }
 
   /** Diagnostics for tests. */
-  info(): { state: string; loaded: boolean; samples: Record<string, number> } {
+  info(): { state: string; loaded: boolean; samples: Record<string, number>; music: Record<string, number> } {
     return {
       state: this.ctx?.state ?? 'none',
       loaded: this.loaded,
       samples: Object.fromEntries(Object.entries(this.buffers).map(([k, v]) => [k, v.length])),
+      music: this.score?.musicInfo() ?? {},
     };
   }
 

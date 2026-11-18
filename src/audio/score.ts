@@ -1,15 +1,19 @@
 /**
  * Music and the finale soundscape.
  *
- * Music: three build-up layers crossfaded by intensity (the meter), a finale swell, and a dawn
- * piece. If tracks exist in /music (build_1/2/3.m4a, finale.m4a, dawn.m4a, e.g. from Suno) they
- * are used; otherwise a quiet generative placeholder plays the same roles.
+ * Music: one build-up loop that starts quiet and muffled and opens up as the meter fills, a
+ * swell under the finale's hammer blow, and a dawn piece. Tracks live in /music (build.m4a,
+ * finale.m4a, dawn.m4a; sources in CREDITS.md). If a file is missing, a quiet generative
+ * placeholder plays that role instead.
  *
  * Finale soundscape: synthesized phone ringtone, alarm-clock beeps, printer grinding, error
  * chimes, and a buzzing light. Original tones, no recognizable brand sounds.
  */
 
 type Loop = { stop(): void };
+
+/** Seconds into build.m4a where the loop restarts (see tools/music.sh). */
+const BUILD_LOOP_START = 30;
 
 export class Score {
   private readonly music: GainNode;
@@ -20,6 +24,8 @@ export class Score {
   private intensity = 0;
   private generative: { stop(): void } | null = null;
   private loops = new Map<string, Loop>();
+  private build: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private readonly loaded: Promise<void>;
 
   constructor(private readonly ctx: AudioContext, out: AudioNode) {
     this.music = ctx.createGain();
@@ -28,12 +34,12 @@ export class Score {
     this.fx = ctx.createGain();
     this.fx.gain.value = 0.5;
     this.fx.connect(out);
-    void this.loadFiles();
+    this.loaded = this.loadFiles();
   }
 
   private async loadFiles(): Promise<void> {
     const base = `${import.meta.env.BASE_URL}music/`;
-    for (const name of ['build_1', 'build_2', 'build_3', 'finale', 'dawn']) {
+    for (const name of ['build', 'finale', 'dawn']) {
       try {
         const r = await fetch(`${base}${name}.m4a`);
         const type = r.headers.get('content-type') ?? '';
@@ -48,37 +54,56 @@ export class Score {
     }
   }
 
-  private get hasStems(): boolean {
-    return !!(this.files.build_1 && this.files.build_2 && this.files.build_3);
+  /** Diagnostics for tests: seconds of each decoded music file (0 = missing or not loaded yet). */
+  musicInfo(): Record<string, number> {
+    return Object.fromEntries(['build', 'finale', 'dawn'].map((n) => [n, Math.round(this.files[n]?.duration ?? 0)]));
   }
 
-  /** Starts the build-up music (quiet until intensity rises). */
+  /** Starts the build-up music (quiet until intensity rises). Waits for the files if needed. */
   start(): void {
     if (this.started) return;
     this.started = true;
-    const t = this.ctx.currentTime;
-    if (this.hasStems) {
-      this.layers = (['build_1', 'build_2', 'build_3'] as const).map((n) => {
+    void this.loaded.then(() => {
+      if (this.stopped) return;
+      const f = this.files.build;
+      if (f) {
         const src = this.ctx.createBufferSource();
-        src.buffer = this.files[n]!;
+        src.buffer = f;
         src.loop = true;
-        const g = this.ctx.createGain();
-        g.gain.value = 0;
-        src.connect(g).connect(this.music);
-        src.start(t + 0.05);
-        return g;
-      });
-    } else {
-      this.generative = this.startGenerative();
-    }
-    this.setIntensity(0);
+        // The file's last seconds crossfade into this point, so the loop has no seam.
+        src.loopStart = Math.min(BUILD_LOOP_START, f.duration - 1);
+        src.loopEnd = f.duration;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 0.5;
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(filter).connect(gain).connect(this.music);
+        src.start(this.ctx.currentTime + 0.05);
+        this.build = { src, gain, filter };
+      } else {
+        this.generative = this.startGenerative();
+      }
+      this.setIntensity(this.intensity, true);
+    });
   }
 
-  /** 0..1: which layers are audible. */
-  setIntensity(v: number): void {
+  private stopped = false;
+
+  /** 0..1: how full the build-up sounds. */
+  setIntensity(v: number, immediate = false): void {
     this.intensity = Math.max(0, Math.min(1, v));
     const t = this.ctx.currentTime;
-    const levels = [0.55 + this.intensity * 0.3, smooth(this.intensity, 0.25, 0.6), smooth(this.intensity, 0.6, 0.95)];
+    const k = this.intensity;
+    if (this.build) {
+      // Muffled and quiet at first, as if from down the corridor; fully open near the finale.
+      const freq = 650 * Math.pow(18000 / 650, smooth(k, 0, 0.9));
+      const level = 0.5 + 0.5 * smooth(k, 0, 0.8);
+      this.build.filter.frequency.setTargetAtTime(freq, t, immediate ? 0.01 : 1.2);
+      this.build.gain.gain.setTargetAtTime(level, t, immediate ? 0.6 : 1.2);
+      return;
+    }
+    const levels = [0.55 + k * 0.3, smooth(k, 0.25, 0.6), smooth(k, 0.6, 0.95)];
     this.layers.forEach((g, i) => g.gain.setTargetAtTime(levels[i], t, 0.8));
   }
 
@@ -86,6 +111,9 @@ export class Score {
   stopMusic(fade = 0.05): void {
     const t = this.ctx.currentTime;
     this.music.gain.setTargetAtTime(0, t, fade);
+    this.stopped = true;
+    this.build?.src.stop(t + fade * 8);
+    this.build = null;
     this.generative?.stop();
     this.generative = null;
   }

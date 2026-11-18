@@ -61,6 +61,15 @@ Each licence verified on its own Freesound page; cut, trimmed, faded, normalised
 | spark_02 | "Spark.wav" by BMacZero, https://freesound.org/people/BMacZero/sounds/94132/ |
 | dawn_birds | "City ambiance in the morning in a residential area" by felix.blume, https://freesound.org/people/felix.blume/sounds/667046/ (30s seamless loop) |
 
+## Music (Freesound, CC0 1.0)
+
+Cut, looped and levelled by `tools/music.sh`. Licences checked on each sound's own page.
+
+| File | Source |
+|---|---|
+| build | "minimalist ambient, subtle pulsing bass, muted piano notes, claustrophobic atmospheric pads, tense slow ambient soundscape" by shqiptarbas, https://freesound.org/people/shqiptarbas/sounds/868505/ |
+| finale | "Movie Short Swell" by jordivburgel, https://freesound.org/people/jordivburgel/sounds/218354/ |
+| dawn | "Sparkling Morning Sun Rays Through Fast-Moving Clouds on a Cold Day Seen From A Warm Room" by CraigHodges, https://freesound.org/people/CraigHodges/sounds/663685/ |
 
 ## Window view (rawpixel, CC0 via Openverse)
 

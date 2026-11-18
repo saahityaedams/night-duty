@@ -91,6 +91,9 @@ test('audio unlocks on the first touch and every sample decodes', async ({ page 
   const a = await page.evaluate(() => window.__nd.audio());
   expect(a.samples).toEqual({ break: 18, debris: 3, clink: 3, glass: 8, metal: 6, plastic: 7, paper: 5, spark: 3 });
   expect(['running', 'suspended']).toContain(a.state);
+  // Music: build-up loop, hammer swell and dawn piece.
+  await expect.poll(async () => (await page.evaluate(() => window.__nd.audio())).music.dawn, { timeout: 10_000 }).toBe(172);
+  expect((await page.evaluate(() => window.__nd.audio())).music).toEqual({ build: 122, finale: 4, dawn: 172 });
 });
 
 test('bat and hammer break things in the locker and printer views', async ({ page }) => {

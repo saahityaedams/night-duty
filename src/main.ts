@@ -38,7 +38,7 @@ interface TestHooks {
   /** Breaks every intact mug at once (for screenshots and tests). */
   breakAll(force?: number): number;
   counts(): { intact: number; breaks: number; shards: number };
-  audio(): { state: string; loaded: boolean; samples: Record<string, number> };
+  audio(): { state: string; loaded: boolean; samples: Record<string, number>; music: Record<string, number> };
   /** Sets the window's night-to-dawn grade (0..1), for previews. */
   setDawn(v: number): void;
   /** Moves the camera to a named shot (seconds = 0 cuts). */
@@ -72,7 +72,7 @@ const hooks: TestHooks = {
   breakAll: () => 0,
   counts: () => ({ intact: 0, breaks: 0, shards: 0 }),
   mugScreenPositions: () => [],
-  audio: () => ({ state: 'none', loaded: false, samples: {} }),
+  audio: () => ({ state: 'none', loaded: false, samples: {}, music: {} }),
   setDawn: () => {},
   shot: () => {},
   hitObject: () => false,

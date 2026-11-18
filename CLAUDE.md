@@ -43,7 +43,7 @@ Read it with the Claude Docs tools before changing gameplay, art, audio or text.
 - `src/game/arc.ts` owns the session: warm-up -> bat -> printer reveal -> hammer/locker reveal -> meter -> finale -> silence -> Pending: 0 -> dawn -> ending. Thresholds live in `src/game/arcConfig.ts`.
 - Preview links: `?all=1` unlocks every tool and view; `?shot=desk|deskWide|left|right|finale|dawn` (case-insensitive) also unlocks everything.
 - Words outside the 3D scene: `src/content/text.ts`, including `PERSONAL_MESSAGE` (empty until the owner writes it).
-- Music: drop `build_1.m4a`, `build_2.m4a`, `build_3.m4a` (same tempo/key, rising intensity), `finale.m4a` and `dawn.m4a` into `public/music/`; `src/audio/score.ts` uses them automatically, otherwise a generative placeholder plays.
+- Music: `public/music/build.m4a` (seamless loop from 30s, opened up by a low-pass filter as the meter fills), `finale.m4a` (swell from the hammer swing through the slow motion) and `dawn.m4a`. All CC0 from Freesound, rebuilt by `tools/music.sh`. A missing file falls back to the generative placeholder in `src/audio/score.ts`.
 - Offline: `npm run build` runs `tools/gen-sw.mjs`, which precaches every file in `dist/` (bump `SW_REV` when changing caching logic).
 
 ## Known follow-ups
