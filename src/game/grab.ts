@@ -18,8 +18,8 @@ export interface GrabOptions {
   /** Lowest height a held object may be dragged to (desk surface + clearance). */
   minHeight: number;
   onGrab?: (body: RAPIER.RigidBody) => void;
-  /** Where forward throws are gently steered toward (x, z on the floor plan). */
-  aimTarget?: THREE.Vector3;
+  /** Where forward throws are gently steered toward (x, z on the floor plan), per moment. */
+  aimTarget?: () => THREE.Vector3 | null;
   onThrow?: (body: RAPIER.RigidBody, speed: number) => void;
 }
 
@@ -160,9 +160,10 @@ export class Grab {
     if (v.length() > THROW_MAX) v.setLength(THROW_MAX);
     // Aim assist: bend the horizontal direction partway toward the target area (the monitor and
     // window), so throws land where she can see them break. Speed is preserved.
-    if (this.o.aimTarget && v.z < 0) {
+    const aim = this.o.aimTarget?.() ?? null;
+    if (aim && v.z < 0) {
       const p = body.translation();
-      const toTarget = new THREE.Vector3(this.o.aimTarget.x - p.x, 0, this.o.aimTarget.z - p.z).normalize();
+      const toTarget = new THREE.Vector3(aim.x - p.x, 0, aim.z - p.z).normalize();
       const flat = new THREE.Vector3(v.x, 0, v.z);
       const speed = flat.length();
       flat.normalize().lerp(toTarget, 0.4).normalize().multiplyScalar(speed);

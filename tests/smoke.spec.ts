@@ -88,6 +88,6 @@ test('audio unlocks on the first touch and every sample decodes', async ({ page 
   await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.1); // empty area: no throw
   await expect.poll(async () => (await page.evaluate(() => window.__nd.audio())).loaded, { timeout: 10_000 }).toBe(true);
   const a = await page.evaluate(() => window.__nd.audio());
-  expect(a.samples).toEqual({ break: 18, debris: 3, clink: 3 });
+  expect(a.samples).toEqual({ break: 18, debris: 3, clink: 3, glass: 8, metal: 6, plastic: 7, paper: 5, spark: 3 });
   expect(['running', 'suspended']).toContain(a.state);
 });

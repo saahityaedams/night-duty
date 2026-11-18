@@ -8,15 +8,24 @@
  * - A bus compressor keeps big moments loud without clipping.
  */
 
-type Category = 'break' | 'debris' | 'clink';
-const COUNTS: Record<Category, number> = { break: 18, debris: 3, clink: 3 };
+type Category = 'break' | 'debris' | 'clink' | 'glass' | 'metal' | 'plastic' | 'paper' | 'spark';
+const COUNTS: Record<Category, number> = { break: 18, debris: 3, clink: 3, glass: 8, metal: 6, plastic: 7, paper: 5, spark: 3 };
 
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private sfx!: GainNode;
   private ambience!: GainNode;
-  private readonly buffers: Record<Category, { buf: AudioBuffer; gain: number }[]> = { break: [], debris: [], clink: [] };
+  private readonly buffers: Record<Category, { buf: AudioBuffer; gain: number }[]> = {
+    break: [],
+    debris: [],
+    clink: [],
+    glass: [],
+    metal: [],
+    plastic: [],
+    paper: [],
+    spark: [],
+  };
   private readonly lastPick: Partial<Record<Category, number>> = {};
   private loaded = false;
   private clinkTimes: number[] = [];
@@ -100,7 +109,7 @@ export class AudioEngine {
     return {
       state: this.ctx?.state ?? 'none',
       loaded: this.loaded,
-      samples: { break: this.buffers.break.length, debris: this.buffers.debris.length, clink: this.buffers.clink.length },
+      samples: Object.fromEntries(Object.entries(this.buffers).map(([k, v]) => [k, v.length])),
     };
   }
 
@@ -168,19 +177,65 @@ export class AudioEngine {
     this.play('clink', v, (small ? 1.25 : 0.95) + Math.random() * 0.35, pan * 0.6);
   }
 
-  /** A room object breaking. Uses the closest recorded material until dedicated sets are added. */
+  /** A room object breaking, layered by material. */
   breakObject(material: string, severity: number, pan: number): void {
-    const rate = material === 'glass' ? 1.25 : material === 'metal' ? 0.6 : material === 'paper' ? 1.6 : 0.85;
-    if (material !== 'paper') this.play('break', 0.6 + severity * 0.4, rate + Math.random() * 0.1, pan * 0.6);
-    this.thump(material === 'metal' ? 0.8 : 0.45 + severity * 0.3);
-    this.play('debris', 0.3 + severity * 0.3, rate, pan * 0.5, 0.12);
+    const v = 0.6 + severity * 0.4;
+    const r = () => 0.92 + Math.random() * 0.16;
+    switch (material) {
+      case 'glass':
+        this.play('glass', v, r(), pan * 0.6);
+        this.play('glass', v * 0.35, r() * 1.3, pan * 0.6, 0.09); // tinkle tail
+        this.thump(0.35 + severity * 0.3);
+        break;
+      case 'metal':
+        this.play('metal', v, r() * 0.9, pan * 0.6);
+        this.play('metal', v * 0.5, r() * 0.7, pan * 0.6, 0.05);
+        this.thump(0.85);
+        break;
+      case 'electronics':
+        this.play('plastic', v, r() * 0.85, pan * 0.6);
+        this.play('spark', v * 0.7, r(), pan * 0.6, 0.04);
+        this.thump(0.6 + severity * 0.3);
+        break;
+      case 'paper':
+        this.play('paper', v, r(), pan * 0.6);
+        this.play('paper', v * 0.6, r() * 0.9, pan * 0.6, 0.18);
+        break;
+      case 'plastic':
+        this.play('plastic', v, r() * 0.9, pan * 0.6);
+        this.play('paper', v * 0.4, r(), pan * 0.6, 0.15); // printers shed paper
+        this.thump(0.5 + severity * 0.3);
+        break;
+      default:
+        this.play('break', v, r(), pan * 0.6);
+        this.thump(0.45 + severity * 0.3);
+    }
   }
 
   /** A room object taking a hit without breaking. */
   hitObject(material: string, strength: number, pan: number): void {
-    const rate = material === 'metal' ? 0.5 : material === 'glass' ? 1.4 : material === 'paper' ? 1.8 : 0.8;
-    this.play('clink', 0.25 + strength * 0.4, rate + Math.random() * 0.1, pan * 0.6);
-    this.thump(0.2 + strength * 0.4);
+    const v = 0.3 + strength * 0.45;
+    switch (material) {
+      case 'glass':
+        this.play('glass', v * 0.45, 1.3 + Math.random() * 0.2, pan * 0.6); // a crack, not a shatter
+        this.thump(0.2 + strength * 0.3);
+        break;
+      case 'metal':
+        this.play('metal', v, 0.85 + Math.random() * 0.2, pan * 0.6);
+        this.thump(0.4 + strength * 0.4);
+        break;
+      case 'paper':
+        this.play('paper', v * 0.7, 1 + Math.random() * 0.2, pan * 0.6);
+        break;
+      case 'electronics':
+        this.play('plastic', v, 0.8 + Math.random() * 0.2, pan * 0.6);
+        if (Math.random() < 0.4) this.play('spark', v * 0.5, 1, pan * 0.6, 0.03);
+        this.thump(0.3 + strength * 0.4);
+        break;
+      default:
+        this.play('plastic', v, 0.9 + Math.random() * 0.2, pan * 0.6);
+        this.thump(0.25 + strength * 0.35);
+    }
   }
 
   /** Mug knocked or set down without breaking: a short ceramic knock. */

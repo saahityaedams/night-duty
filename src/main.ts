@@ -255,7 +255,13 @@ async function main() {
     pickable: () => new Map([...pickable, ...objects.grabbable]),
     minHeight: ROOM.desk.top + 0.03,
     onGrab: () => haptics.tick(0.2),
-    aimTarget: new THREE.Vector3(monitor.group.position.x, 0, monitor.group.position.z),
+    // Steer toward whatever the camera is showing: the monitor, the locker, or the printer.
+    aimTarget: () =>
+      rig.current === 'left'
+        ? new THREE.Vector3(-1.04, 0, ROOM.wallZ + 0.2)
+        : rig.current === 'right'
+          ? new THREE.Vector3(1.07, 0, ROOM.wallZ + 0.24)
+          : new THREE.Vector3(monitor.group.position.x, 0, monitor.group.position.z),
   });
 
   // Post-processing and framing.
