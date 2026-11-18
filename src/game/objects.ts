@@ -12,6 +12,7 @@ import { createPhone, createAlarmClock, createTower, createPrinter, PHONE_NOTIFI
 import { createLocker, createWhiteboard } from '../scene/props/furniture';
 import { createKeyboard, createCaseFile, createPaperStack } from '../scene/props/deskItems';
 import { createPaperCup, crumple, createWaterBottle, createStapler } from '../scene/props/smallItems';
+import { Debris } from './debris';
 
 /**
  * The room's breakable objects (everything except the mugs), wired to the damage system.
@@ -86,6 +87,10 @@ export function createRoomObjects(env: Env): RoomObjects {
   const emit = (e: ObjectEvent) => listeners.forEach((cb) => cb(e));
   const top = ROOM.desk.top;
   const updaters: ((dt: number, time: number) => void)[] = [];
+  // Settled glass shards are merged per material, like mug shards, so a wrecked room stays cheap.
+  const glassDebris = new Debris(scene, glassEdge);
+  updaters.push((dt) => glassDebris.update(dt));
+  physics.onLost((body) => glassDebris.removeBody(body));
   const buzzListeners: (() => void)[] = [];
   let finaleOn = false;
   let popupsShown = 0;
@@ -159,7 +164,8 @@ export function createRoomObjects(env: Env): RoomObjects {
       const wp = s.centroid.clone().applyMatrix4(pane.matrixWorld);
       mesh.position.copy(wp);
       mesh.quaternion.copy(q);
-      mesh.castShadow = true;
+      // Small slivers' shadows are invisible at phone size; skip them.
+      mesh.castShadow = s.volume > 4e-7;
       scene.add(mesh);
       const away = wp.clone().sub(hit.point).normalize();
       const v = normal.clone().multiplyScalar(0.6 + Math.random() * 1.2).addScaledVector(away, 0.5 + Math.random());
@@ -174,6 +180,7 @@ export function createRoomObjects(env: Env): RoomObjects {
       const desc = rapier.ColliderDesc.convexHull(s.hull) ?? rapier.ColliderDesc.ball(0.005);
       world.createCollider(desc.setMass(Math.max(0.001, s.volume * 2500)).setFriction(0.5).setRestitution(0.15), rb);
       physics.bind(rb, mesh);
+      glassDebris.add(mesh, rb, mats[0], mats[1]);
     }
     pane.visible = false;
   };

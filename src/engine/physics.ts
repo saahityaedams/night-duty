@@ -100,7 +100,10 @@ export class Physics {
     this.hitListeners.push(cb);
   }
 
-  /** Called when a body falls out of the world; the listener is responsible for removing it. */
+  /**
+   * Called after a body fell out of the world and was removed (with its object), so systems that
+   * track bodies can forget it. Listeners must not remove it again.
+   */
   onLost(cb: (body: RAPIER.RigidBody, object: THREE.Object3D) => void): void {
     this.lostListeners.push(cb);
   }
@@ -174,11 +177,10 @@ export class Physics {
       }
     }
     for (const b of lost) {
-      if (this.lostListeners.length) for (const cb of this.lostListeners) cb(b.body, b.object);
-      else {
-        this.removeBody(b.body);
-        b.object.removeFromParent();
-      }
+      // Listeners clean up their records first (they may still read the body), then it goes.
+      for (const cb of this.lostListeners) cb(b.body, b.object);
+      this.removeBody(b.body);
+      b.object.removeFromParent();
     }
   }
 

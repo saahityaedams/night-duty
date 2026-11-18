@@ -7,7 +7,7 @@ await p.goto('http://localhost:5173/');
 await p.waitForFunction(() => window.__nd?.ready);
 await p.waitForTimeout(1200);
 const box = await p.locator('#game').boundingBox();
-const shot = async (name) => { await p.screenshot({ path: `${out}_${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.__nd.arc()))); };
+const shot = async (name) => { await p.screenshot({ path: `${out}_${name}.png` }); const st = await p.evaluate(() => window.__nd.stats()); console.log(name, JSON.stringify(await p.evaluate(() => window.__nd.arc())), 'draws', st.drawCalls, 'tris', st.triangles, 'p95', st.p95.toFixed(1), 'awake', st.activeBodies); await p.evaluate(() => window.__nd.resetStats()); };
 await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.08); // first touch: unlock audio
 await shot('0warm');
 await p.evaluate(() => window.__nd.arcAdd(6)); await p.waitForTimeout(2600); await shot('1bat');

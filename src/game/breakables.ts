@@ -81,13 +81,11 @@ export class Breakables {
   ) {
     physics.onHit((hit) => this.handleHit(hit));
     // Anything that falls out of the world is removed cleanly.
-    physics.onLost((body, object) => {
-      const e = this.debris.removeBody(body);
+    physics.onLost((body) => {
+      // Physics removes the body and its mesh; just forget it here.
+      this.debris.removeBody(body);
       for (let i = 0; i < body.numColliders(); i++) this.shardColliders.delete(body.collider(i).handle);
       for (const [h, entry] of this.byCollider) if (entry.body === body) (this.byCollider.delete(h), (entry.broken = true));
-      this.physics.removeBody(body);
-      object.removeFromParent();
-      e?.mesh.geometry.dispose();
     });
     this.debris = new Debris(scene, bisqueMaterial);
   }

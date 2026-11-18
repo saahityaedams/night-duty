@@ -267,8 +267,12 @@ export class Arc {
 
     // Shockwave: every loose thing flies away from the monitor.
     const { world } = d.physics;
+    // Collect first, push after: Rapier refuses changes to bodies mid-iteration.
+    const bodies: RAPIER.RigidBody[] = [];
     world.forEachRigidBody((b) => {
-      if (!b.isDynamic()) return;
+      if (b.isDynamic()) bodies.push(b);
+    });
+    bodies.forEach((b) => {
       const t = b.translation();
       const out = new THREE.Vector3(t.x - origin.x, 0, t.z - origin.z);
       const dist = Math.max(0.15, out.length());
