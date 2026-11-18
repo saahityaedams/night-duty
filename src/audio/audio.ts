@@ -165,6 +165,25 @@ export class AudioEngine {
     o.stop(t + 0.2);
   }
 
+  /** The sledgehammer landing: a deep, longer boom under the usual thump, bigger with charge. */
+  slam(charge: number): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(30, t + 0.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.6 + 0.4 * charge, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45 + 0.2 * charge);
+    o.connect(g).connect(this.sfx);
+    o.start(t);
+    o.stop(t + 0.7);
+    this.thump(0.7 + 0.3 * charge);
+  }
+
   /** A swing through the air (bat or hammer): a short filtered-noise whoosh. */
   whoosh(strength: number, heavy = false): void {
     const ctx = this.ctx;

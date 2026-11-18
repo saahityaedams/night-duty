@@ -44,10 +44,14 @@ const BAT_TAP_FORCE = 120;
 const BAT_REACH = 0.06;
 /** How long the swipe streak lingers (ms). */
 const TRAIL_MS = 200;
-const HAMMER_MIN = 110;
-const HAMMER_MAX = 420;
+const HAMMER_MIN = 170;
+const HAMMER_MAX = 520;
 const HAMMER_CHARGE_S = 0.9;
-const HAMMER_RADIUS = 0.22;
+/** Shockwave radius (m) for an uncharged and a fully charged blow. */
+const HAMMER_RADIUS_MIN = 0.2;
+const HAMMER_RADIUS_MAX = 0.34;
+/** The hammer's aim is more forgiving than the bat's: it lands on the nearest thing it can hurt. */
+const HAMMER_REACH = 0.09;
 
 export class Tools {
   current: ToolName = 'hand';
@@ -70,7 +74,9 @@ export class Tools {
   private trailPts: { x: number; y: number; t: number }[] = [];
   private hint: HTMLDivElement | null = null;
   private trailDirty = false;
-  private hammerAnim = { t: 1, target: new THREE.Vector3() };
+  private hammerAnim = { t: 1, target: new THREE.Vector3(), lift: 0.45 };
+  /** While the hammer is held down: raised over this point. */
+  private windup: { target: THREE.Vector3 } | null = null;
   private readonly ray = new THREE.Raycaster();
 
   constructor(private readonly o: Options) {
@@ -132,6 +138,12 @@ export class Tools {
       this.ring.style.top = `${e.clientY - r.top}px`;
       this.ring.classList.add('on');
       this.ring.style.setProperty('--k', '0');
+      // Wind-up: the hammer appears raised over the spot and lifts higher as the charge builds.
+      const aim = this.hammerAim(e.clientX, e.clientY);
+      if (aim && this.hammerAnim.t >= 1) {
+        this.windup = { target: aim.point.clone() };
+        this.hammer.visible = true;
+      }
     }
   }
 
@@ -145,6 +157,10 @@ export class Tools {
       this.ring.style.left = `${e.clientX - r.left}px`;
       this.ring.style.top = `${e.clientY - r.top}px`;
       this.path.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      if (this.windup) {
+        const aim = this.hammerAim(e.clientX, e.clientY);
+        if (aim) this.windup.target.copy(aim.point);
+      }
     }
   }
 
@@ -172,15 +188,16 @@ export class Tools {
     } else if (this.current === 'hammer') {
       this.ring.classList.remove('on');
       const charge = Math.min(1, (e.timeStamp - this.chargeStart) / 1000 / HAMMER_CHARGE_S);
-      const hit = this.scriptedTarget?.() ?? this.cast(e.clientX, e.clientY);
+      const hit = this.hammerAim(e.clientX, e.clientY);
+      this.windup = null;
       if (hit) {
-        this.hammerAnim = { t: 0, target: hit.point.clone() };
+        this.hammerAnim = { t: 0, target: hit.point.clone(), lift: 0.17 + 0.16 * charge };
         this.hammer.visible = true;
         for (const cb of this.swingListeners) cb('hammer', charge);
         // The blow lands at the bottom of the swing.
         const force = HAMMER_MIN + (HAMMER_MAX - HAMMER_MIN) * charge;
         setTimeout(() => {
-          this.hammerStrike(hit.point, hit.collider, force);
+          this.hammerStrike(hit.point, hit.collider, force, charge);
           for (const cb of this.landListeners) cb(hit.point, force, charge);
         }, 110);
       }
@@ -274,7 +291,7 @@ export class Tools {
    * A forgiving cast for the bat: the exact ray first, then a ball swept along it so a swipe that
    * passes just beside an object still connects. The desk, walls and floor are ignored.
    */
-  private castFat(x: number, y: number, refresh = true): { collider: RAPIER.Collider; point: THREE.Vector3 } | null {
+  private castFat(x: number, y: number, refresh = true, reach = BAT_REACH): { collider: RAPIER.Collider; point: THREE.Vector3 } | null {
     if (refresh) this.refreshHittable();
     const exact = this.cast(x, y);
     if (exact && this.hittable(exact.collider)) return exact;
@@ -285,7 +302,7 @@ export class Tools {
       { x: o.x, y: o.y, z: o.z },
       { x: 0, y: 0, z: 0, w: 1 },
       { x: d.x, y: d.y, z: d.z },
-      new rapier.Ball(BAT_REACH),
+      new rapier.Ball(reach),
       0,
       6,
       true,
@@ -298,8 +315,13 @@ export class Tools {
     if (!hit) return null;
     // Don't reach through solid scenery: the object must be in front of whatever the exact ray hit.
     if (exact && hit.time_of_impact > exact.point.distanceTo(o) + 0.15) return null;
-    const p = o.clone().addScaledVector(d, hit.time_of_impact + BAT_REACH);
+    const p = o.clone().addScaledVector(d, hit.time_of_impact + reach);
     return { collider: hit.collider, point: p };
+  }
+
+  /** Where a hammer blow at this screen point lands: the nearest breakable thing, else the surface. */
+  private hammerAim(x: number, y: number): { collider: RAPIER.Collider; point: THREE.Vector3 } | null {
+    return this.scriptedTarget?.() ?? this.castFat(x, y, true, HAMMER_REACH) ?? this.cast(x, y);
   }
 
   /** A looping ghost swipe over the desk, shown when the bat first unlocks, gone after the first swing. */
@@ -368,14 +390,15 @@ export class Tools {
     return hitSomething;
   }
 
-  private hammerStrike(point: THREE.Vector3, collider: RAPIER.Collider, force: number): void {
+  private hammerStrike(point: THREE.Vector3, collider: RAPIER.Collider, force: number, charge = 1): void {
+    const radius = HAMMER_RADIUS_MIN + (HAMMER_RADIUS_MAX - HAMMER_RADIUS_MIN) * charge;
     const { rapier, world } = this.o.physics;
     const down = new THREE.Vector3(0, -1, 0).add(this.ray.ray.direction.clone().multiplyScalar(0.4)).normalize();
     this.strike(collider, point, force, down, 'hammer');
     // Shockwave: loose things nearby fly outward; mugs nearby break.
     // Collect first, act after: breaking things removes bodies, which Rapier forbids mid-query.
     const hits: RAPIER.Collider[] = [];
-    world.intersectionsWithShape({ x: point.x, y: point.y, z: point.z }, { x: 0, y: 0, z: 0, w: 1 }, new rapier.Ball(HAMMER_RADIUS), (c) => {
+    world.intersectionsWithShape({ x: point.x, y: point.y, z: point.z }, { x: 0, y: 0, z: 0, w: 1 }, new rapier.Ball(radius), (c) => {
       if (c.handle !== collider.handle) hits.push(c);
       return true;
     });
@@ -386,9 +409,9 @@ export class Tools {
       const t = c.translation();
       const out = new THREE.Vector3(t.x - point.x, 0, t.z - point.z);
       const dist = Math.max(0.03, out.length());
-      const falloff = 1 - Math.min(1, dist / HAMMER_RADIUS);
+      const falloff = 1 - Math.min(1, dist / radius);
       out.normalize().setY(0.9).normalize();
-      const f = force * 0.6 * falloff;
+      const f = force * 0.75 * falloff;
       const target = this.o.damage.targetFor(c);
       if (target && f > 20) this.o.damage.apply(target, new THREE.Vector3(t.x, t.y, t.z), f);
       if (world.getCollider(c.handle) === c) this.o.breakables.strike(c, f, new THREE.Vector3(t.x, t.y, t.z));
@@ -416,6 +439,16 @@ export class Tools {
       this.bat.rotation.set(-0.25, 0, a - Math.PI / 2);
       if (this.batAnim.t >= 1) this.bat.visible = false;
     }
+    if (this.windup && this.hammerAnim.t >= 1) {
+      // Held: raised and tilted back over the target, rising with the charge, trembling when full.
+      const k = this.charge;
+      const target = this.windup.target;
+      const toCam = new THREE.Vector3().subVectors(this.o.camera.position, target).setY(0).normalize();
+      const shake = k >= 1 ? (Math.random() - 0.5) * 0.006 : 0;
+      this.hammer.position.copy(target).add(new THREE.Vector3(shake, 0.17 + 0.16 * k, shake)).addScaledVector(toCam, 0.14 + 0.04 * k);
+      this.hammer.lookAt(this.hammer.position.clone().add(toCam));
+      this.hammer.rotateX(-1.1 - 0.35 * k);
+    }
     if (this.hammerAnim.t < 1) {
       this.hammerAnim.t = Math.min(1, this.hammerAnim.t + dt / 0.5);
       const t = this.hammerAnim.t;
@@ -424,7 +457,7 @@ export class Tools {
       const k = Math.min(1, t / 0.22);
       const slam = k * k;
       const toCam = new THREE.Vector3().subVectors(this.o.camera.position, target).setY(0).normalize();
-      const start = target.clone().add(new THREE.Vector3(0, 0.45, 0)).addScaledVector(toCam, 0.25);
+      const start = target.clone().add(new THREE.Vector3(0, this.hammerAnim.lift, 0)).addScaledVector(toCam, 0.25);
       const end = target.clone().add(new THREE.Vector3(0, 0.03, 0));
       const lift = t > 0.6 ? (t - 0.6) / 0.4 : 0;
       this.hammer.position.lerpVectors(start, end, slam).add(new THREE.Vector3(0, lift * 0.25, 0));

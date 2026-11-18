@@ -336,14 +336,20 @@ async function main() {
   tools.onStrike((e) => {
     if (e.hitSomething) hooks.strikes.hit++;
     if (e.tool === 'hammer') {
-      timefx.hitStop(40 + (e.force / 420) * 60);
-      shake.add(0.25 + (e.force / 420) * 0.45);
-      haptics.tick(0.8);
+      const k = Math.min(1, e.force / 520);
+      timefx.hitStop(70 + k * 90);
+      shake.add(0.4 + k * 0.6);
+      haptics.tick(1);
     } else {
       shake.add(0.06 + Math.min(0.2, e.force / 1500));
       haptics.tick(0.35);
     }
     if (!e.hitSomething) audio.thud(Math.min(1, e.force / 300));
+  });
+  // The hammer landing: a deep boom and a puff of dust and grit, whatever it hit.
+  tools.onHammerLand((point, _force, charge) => {
+    audio.slam(charge);
+    particles.chipsBurst(point, new THREE.Vector3(0, 1.2 + charge, 0), Math.round(14 + 26 * charge), new THREE.Color(0.55, 0.5, 0.44));
   });
   objects.onBuzz(() => audio.buzz());
 
