@@ -195,8 +195,9 @@ export function createRoomObjects(env: Env): RoomObjects {
     reg({
       name: 'phone',
       colliders: [col],
-      health: 90,
-      armour: 10,
+      // Phone glass is fragile: a mug hitting it or a hard throw should crack it, two good hits break it.
+      health: 40,
+      armour: 5,
       stages: [0.6, 0.3],
       material: 'glass',
       onHit: (hit) => {

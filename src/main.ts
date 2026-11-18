@@ -15,6 +15,8 @@ import { PaperStorm } from './fx/paper';
 import { createRoomObjects } from './game/objects';
 import { PEN_JAR, createPens, glassJarMaterial, glassEdgeMaterial } from './scene/props/smallItems';
 import { detachParts } from './game/damage';
+import { Tools } from './game/tools';
+import { createHud } from './ui/hud';
 import { Particles } from './fx/particles';
 import { Breakables } from './game/breakables';
 import { Grab } from './game/grab';
@@ -286,6 +288,7 @@ async function main() {
     camera,
     element: canvas,
     pickable: () => new Map([...pickable, ...objects.grabbable]),
+    enabled: () => tools.current === 'hand',
     minHeight: ROOM.desk.top + 0.03,
     onGrab: () => haptics.tick(0.2),
     // Steer toward whatever the camera is showing: the monitor, the locker, or the printer.
@@ -300,9 +303,43 @@ async function main() {
   // Post-processing and framing.
   const post = createPostPipeline(ctx, scene);
   const rig = new CameraRig(camera);
-  const shotParam = new URLSearchParams(location.search).get('shot');
-  if (shotParam && shotParam in SHOTS) rig.go(shotParam as ShotName, 0);
+  // ?shot= preview link, case-insensitive (phone keyboards lowercase URLs).
+  const shotParam = (new URLSearchParams(location.search).get('shot') ?? '').toLowerCase();
+  const shotName = (Object.keys(SHOTS) as ShotName[]).find((k) => k.toLowerCase() === shotParam);
+  if (shotName) rig.go(shotName, 0);
   ctx.onResize(() => rig.refresh());
+
+  // --- Tools and controls ----------------------------------------------------------------------
+  const tools = new Tools({ camera, scene, element: canvas, stage, physics, damage: objects.damage, breakables });
+  const hud = createHud(stage);
+  hud.setTool('hand');
+  hud.setTools(['hand', 'bat', 'hammer']); // the arc will unlock these progressively
+  const selectTool = (t: 'hand' | 'bat' | 'hammer') => {
+    tools.select(t);
+    hud.setTool(t);
+    haptics.tick(0.15);
+  };
+  hud.onTool(selectTool);
+  tools.onSwing((tool, strength) => audio.whoosh(strength, tool === 'hammer'));
+  tools.onStrike((e) => {
+    if (e.tool === 'hammer') {
+      timefx.hitStop(40 + (e.force / 420) * 60);
+      shake.add(0.25 + (e.force / 420) * 0.45);
+      haptics.tick(0.8);
+    } else {
+      shake.add(0.06 + Math.min(0.2, e.force / 1500));
+      haptics.tick(0.35);
+    }
+    if (!e.hitSomething) audio.thud(Math.min(1, e.force / 300));
+  });
+  // Looking around: left (locker) ← desk → right (printer and roster).
+  const updateArrows = () => hud.setArrows(rig.current !== 'left', rig.current !== 'right');
+  hud.onLook((dir) => {
+    const next = dir === 'left' ? (rig.current === 'right' ? 'desk' : 'left') : rig.current === 'left' ? 'desk' : 'right';
+    rig.go(next, 1.1);
+    updateArrows();
+  });
+  updateArrows();
 
   // --- Main loop -----------------------------------------------------------------------------
   const stats = new FrameStats();
@@ -344,6 +381,7 @@ async function main() {
     }
 
     rig.update(realDt);
+    tools.update(realDt);
     shake.captureBase();
     shake.update(realDt);
     room.window.update(timer.getElapsed());

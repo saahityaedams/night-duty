@@ -24,6 +24,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'iphone-webkit', use: { ...devices['iPhone 15 Pro'] } },
-    { name: 'android-chrome', use: { ...devices['Pixel 7'], channel: 'chrome' } },
+    // --mute-audio: tests tap the game, which unlocks audio; never play it through the speakers.
+    { name: 'android-chrome', use: { ...devices['Pixel 7'], channel: 'chrome', launchOptions: { args: ['--mute-audio'] } } },
   ],
 });

@@ -75,6 +75,12 @@ export class Damage {
     this.hitListeners.push(cb);
   }
 
+  /** The target a collider belongs to, if any (for tools striking things). */
+  targetFor(collider: RAPIER.Collider): DamageTarget | null {
+    const t = this.byCollider.get(collider.handle);
+    return t && !t.broken ? t : null;
+  }
+
   isBroken(t: DamageTarget): boolean {
     return (t as Live).broken === true;
   }

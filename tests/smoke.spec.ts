@@ -92,3 +92,37 @@ test('audio unlocks on the first touch and every sample decodes', async ({ page 
   expect(a.samples).toEqual({ break: 18, debris: 3, clink: 3, glass: 8, metal: 6, plastic: 7, paper: 5, spark: 3 });
   expect(['running', 'suspended']).toContain(a.state);
 });
+
+test('bat and hammer break things in the locker and printer views', async ({ page }) => {
+  await boot(page);
+  const box = (await page.locator('#game').boundingBox())!;
+  const X = (f: number) => box.x + box.width * f;
+  const Y = (f: number) => box.y + box.height * f;
+  // Bat: swipes across the locker.
+  await page.evaluate(() => window.__nd.shot('left', 0));
+  await page.locator('button[aria-label="bat"]').dispatchEvent('pointerdown');
+  for (let rep = 0; rep < 4; rep++) {
+    await page.mouse.move(X(0.15), Y(0.45));
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(X(0.15 + i * 0.09), Y(0.45 + i * 0.01));
+      await page.waitForTimeout(8);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
+  // Hammer: charged blows on the printer.
+  await page.evaluate(() => window.__nd.shot('right', 0));
+  await page.locator('button[aria-label="hammer"]').dispatchEvent('pointerdown');
+  for (let rep = 0; rep < 3; rep++) {
+    await page.mouse.move(X(0.62), Y(0.62));
+    await page.mouse.down();
+    await page.waitForTimeout(950);
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+  }
+  const broken = (await page.evaluate(() => window.__nd.objects())).filter((o) => o.broken).map((o) => o.name);
+  expect(broken).toContain('locker');
+  expect(broken).toContain('printer');
+  expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
+});

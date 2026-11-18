@@ -13,7 +13,7 @@ const wait = Number(opt('wait', '2500'));
 const url = opt('url', 'http://localhost:5173/');
 const evalJs = opt('eval', '');
 
-const browser = engine === 'chrome' ? await chromium.launch({ channel: 'chrome' }) : await webkit.launch();
+const browser = engine === 'chrome' ? await chromium.launch({ channel: 'chrome', args: ['--mute-audio'] }) : await webkit.launch();
 const page = await browser.newPage({ ...devices[engine === 'chrome' ? 'Pixel 7' : 'iPhone 15 Pro'] });
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));

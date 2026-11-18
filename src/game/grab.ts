@@ -15,6 +15,8 @@ export interface GrabOptions {
   element: HTMLElement;
   /** Meshes that can be picked, mapped to their body. */
   pickable: () => Map<THREE.Object3D, RAPIER.RigidBody>;
+  /** Grabbing only works while this returns true (the hand tool is selected). */
+  enabled?: () => boolean;
   /** Lowest height a held object may be dragged to (desk surface + clearance). */
   minHeight: number;
   onGrab?: (body: RAPIER.RigidBody) => void;
@@ -82,6 +84,7 @@ export class Grab {
   /** Programmatic input for tests: same path as real touches. */
   down(id: number, x: number, y: number, t: number): boolean {
     if (this.pointerId !== -1) return false;
+    if (this.o.enabled && !this.o.enabled()) return false;
     const map = this.o.pickable();
     const hit = this.castFrom(x, y).intersectObjects([...map.keys()], false)[0];
     if (!hit) return false;

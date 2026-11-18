@@ -66,7 +66,8 @@ export class AudioEngine {
     comp.attack.value = 0.003;
     comp.release.value = 0.18;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.9;
+    // Silent under automated testing (navigator.webdriver), so test runs never play through speakers.
+    this.master.gain.value = navigator.webdriver ? 0 : 0.9;
     this.sfx = ctx.createGain();
     this.ambience = ctx.createGain();
     this.ambience.gain.value = 0.0;
@@ -154,6 +155,38 @@ export class AudioEngine {
     o.connect(g).connect(this.sfx);
     o.start(t);
     o.stop(t + 0.2);
+  }
+
+  /** A swing through the air (bat or hammer): a short filtered-noise whoosh. */
+  whoosh(strength: number, heavy = false): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    const len = heavy ? 0.42 : 0.26;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(heavy ? 220 : 400, t);
+    bp.frequency.exponentialRampToValueAtTime(heavy ? 900 : 2600, t + len * 0.55);
+    bp.frequency.exponentialRampToValueAtTime(heavy ? 300 : 700, t + len);
+    const g = ctx.createGain();
+    const peak = (heavy ? 0.5 : 0.35) * (0.4 + strength * 0.6);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + len * 0.45);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    src.connect(bp).connect(g).connect(this.sfx);
+    src.start(t);
+  }
+
+  /** A blunt hit on something that doesn't break (the desk, a wall). */
+  thud(strength: number): void {
+    this.thump(0.3 + strength * 0.6);
+    this.play('clink', 0.15 + strength * 0.2, 0.55, 0);
   }
 
   /** A mug breaking. severity 0..1, pan -1..1 from screen position. */

@@ -144,6 +144,14 @@ export class Breakables {
     }
   }
 
+  /** Breaks the mug owning `collider` if `force` is enough (tools striking it). Returns true if it broke. */
+  strike(collider: RAPIER.Collider, force: number, point: THREE.Vector3): boolean {
+    const e = this.byCollider.get(collider.handle);
+    if (!e || e.broken || force < e.strength) return false;
+    this.breakMug(e, { collider1: collider, collider2: collider, force, point: { x: point.x, y: point.y, z: point.z } });
+    return true;
+  }
+
   /** Force-break a mug (used by tests and scripted moments). */
   breakBody(body: RAPIER.RigidBody, force = 120): boolean {
     for (const e of this.byCollider.values()) {
