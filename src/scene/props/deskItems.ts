@@ -164,13 +164,12 @@ function formTexture(title: string, seed: number): THREE.CanvasTexture {
   return tex;
 }
 
-const paperGeo = new THREE.BoxGeometry(0.21, 0.0004, 0.297);
+const sheetGeo = new THREE.PlaneGeometry(0.21, 0.297).rotateX(-Math.PI / 2);
 
+/** One A4 sheet: a single printed face (one draw call; paper is too thin for visible edges). */
 export function createSheet(title: string, seed: number): THREE.Mesh {
   const face = new THREE.MeshStandardMaterial({ map: formTexture(title, seed), roughness: 0.92 });
-  const edge = new THREE.MeshStandardMaterial({ color: 0xe9e6de, roughness: 0.95 });
-  // BoxGeometry material order: +x, -x, +y (top), -y, +z, -z.
-  const sheet = new THREE.Mesh(paperGeo, [edge, edge, face, edge, edge, edge]);
+  const sheet = new THREE.Mesh(sheetGeo, face);
   sheet.receiveShadow = true;
   sheet.castShadow = true;
   return sheet;
@@ -232,11 +231,15 @@ export function createCaseFile(label: string): THREE.Group {
   coverTex.colorSpace = THREE.SRGBColorSpace;
   coverTex.anisotropy = 8;
   const coverMat = new THREE.MeshStandardMaterial({ map: coverTex, roughness: 0.85 });
-  const front = new THREE.Mesh(new THREE.BoxGeometry(W, 0.0012, D), [card, card, coverMat, card, card, card]);
+  const front = new THREE.Mesh(new THREE.BoxGeometry(W, 0.0012, D), card);
   front.position.set(0, 0.0064, 0);
   front.rotation.y = 0.02;
   front.castShadow = front.receiveShadow = true;
   group.add(front);
+  const coverFace = new THREE.Mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), coverMat);
+  coverFace.position.y = 0.00065;
+  coverFace.receiveShadow = true;
+  front.add(coverFace);
   return group;
 }
 

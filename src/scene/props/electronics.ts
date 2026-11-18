@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeStatic } from '../merge';
 
 /**
  * Electronics, each built from separate named parts so they can come apart when smashed.
@@ -167,7 +168,11 @@ export function createTower(): Assembly {
   side.position.set(W / 2 - t / 2, H / 2, 0);
   group.add(side);
   parts.push(side);
-  return { group: shadowed(group), parts, half: new THREE.Vector3(W / 2, H / 2, D / 2) };
+  // Merge the fixed chassis; the parts that fly off stay separate.
+  for (const p of parts) p.userData.noMerge = true;
+  shadowed(group);
+  mergeStatic(group);
+  return { group, parts, half: new THREE.Vector3(W / 2, H / 2, D / 2) };
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -11,6 +11,7 @@ import { MONITOR, type Monitor } from '../scene/props/monitor';
 import { createPhone, createAlarmClock, createTower, createPrinter, PHONE_NOTIFICATIONS } from '../scene/props/electronics';
 import { createLocker, createWhiteboard } from '../scene/props/furniture';
 import { createKeyboard, createCaseFile, createPaperStack } from '../scene/props/deskItems';
+import { createPaperCup, crumple, createWaterBottle, createStapler } from '../scene/props/smallItems';
 
 /**
  * The room's breakable objects (everything except the mugs), wired to the damage system.
@@ -427,6 +428,82 @@ export function createRoomObjects(env: Env): RoomObjects {
       onBreak: (hit) => {
         world.removeCollider(col, true);
         detachParts(physics, scene, [board.group], hit.point, { burst: 0.9, density: 500, spin: 2, direction: new THREE.Vector3(0, -0.2, 1) });
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Paper cups: crumple further with every hit; never break, always throwable.
+  ([[-0.06, -0.19, 0.4], [0.34, -0.46, 1.9]] as [number, number, number][]).forEach(([x, z, ry], i) => {
+    const cup = createPaperCup();
+    cup.group.position.set(x, top, z);
+    cup.group.rotation.y = ry;
+    scene.add(cup.group);
+    const { body, col } = dynamicBody(cup.group, new THREE.Vector3(cup.radius, cup.height / 2, cup.radius), 60, cup.height / 2);
+    grabbable.set(cup.mesh, body);
+    let crumpled = 0;
+    reg({
+      name: `paper-cup-${i}`,
+      colliders: [col],
+      health: 1e9,
+      armour: 3,
+      material: 'paper',
+      onHit: (hit) => {
+        const amount = Math.min(0.6 - crumpled, 0.15 + hit.damage / 60);
+        if (amount > 0.02) {
+          crumple(cup.mesh, amount);
+          crumpled += amount;
+        }
+      },
+      onBreak: () => {},
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Water bottle: dents, then bursts and sprays.
+  {
+    const bottle = createWaterBottle();
+    bottle.group.position.set(-0.33, top, -0.36);
+    scene.add(bottle.group);
+    const { body, col } = dynamicBody(bottle.group, new THREE.Vector3(bottle.radius, bottle.height / 2, bottle.radius), 350, bottle.height / 2);
+    bottle.group.traverse((o) => (o as THREE.Mesh).isMesh && grabbable.set(o, body));
+    let dent = 0;
+    reg({
+      name: 'bottle',
+      colliders: [col],
+      health: 45,
+      armour: 7,
+      material: 'plastic',
+      onHit: (hit) => {
+        dent = Math.min(0.35, dent + hit.damage / 160);
+        bottle.group.children[0].scale.set(1 - dent, 1, 1 + dent * 0.3);
+      },
+      onBreak: (hit) => {
+        bottle.water.visible = false;
+        bottle.group.children[0].scale.set(0.6, 0.92, 1.2);
+        particles.splash(bottle.group.localToWorld(new THREE.Vector3(0, 0.04, 0)), new THREE.Vector3().subVectors(bottle.group.position, hit.point).setY(0.8).normalize().multiplyScalar(1.5), 120, Math.random, true);
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Stapler: the arm springs off and staples scatter.
+  {
+    const st = createStapler();
+    st.group.position.set(0.27, top, -0.5);
+    st.group.rotation.y = 0.45;
+    scene.add(st.group);
+    const { body, col } = dynamicBody(st.group, st.half, 2200, st.half.y);
+    st.group.traverse((o) => (o as THREE.Mesh).isMesh && grabbable.set(o, body));
+    reg({
+      name: 'stapler',
+      colliders: [col],
+      health: 50,
+      armour: 9,
+      material: 'metal',
+      onBreak: (hit) => {
+        detachParts(physics, scene, [st.arm], hit.point, { burst: 1.6, density: 2000, spin: 16, direction: new THREE.Vector3(0, 1, 0) });
+        particles.chipsBurst(hit.point, new THREE.Vector3(0, 1, 0), 24, new THREE.Color(0xb8bcc2), Math.random);
       },
     });
   }

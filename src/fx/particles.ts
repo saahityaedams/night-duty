@@ -28,6 +28,7 @@ interface Drop {
   v: THREE.Vector3;
   s: number;
   alive: boolean;
+  water: boolean;
 }
 
 /** An irregular liquid splat drawn into an alpha texture: a main blob with satellite drops. */
@@ -74,6 +75,7 @@ export class Particles {
   readonly group = new THREE.Group();
   private readonly chipMesh: THREE.InstancedMesh;
   private readonly dropMesh: THREE.InstancedMesh;
+  private readonly waterMesh: THREE.InstancedMesh;
   private readonly stainMesh: THREE.InstancedMesh;
   private readonly puddleMesh: THREE.InstancedMesh;
   private puddleNext = 0;
@@ -114,6 +116,14 @@ export class Particles {
     this.dropMesh.count = 0;
     this.dropMesh.frustumCulled = false;
     this.dropMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.waterMesh = new THREE.InstancedMesh(
+      dropGeo,
+      new THREE.MeshStandardMaterial({ color: 0xcfe6f2, roughness: 0.02, envMapIntensity: 1.2, transparent: true, opacity: 0.5, depthWrite: false }),
+      DROP_MAX,
+    );
+    this.waterMesh.count = 0;
+    this.waterMesh.frustumCulled = false;
+    this.waterMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
     // Tea on the desk: translucent warm brown with a faint wet sheen, irregular edges.
     const liquid = (alphaMap: THREE.Texture, opacity: number) =>
@@ -140,7 +150,7 @@ export class Particles {
     this.puddleMesh.frustumCulled = false;
     this.puddleMesh.renderOrder = 1;
 
-    this.group.add(this.chipMesh, this.dropMesh, this.stainMesh, this.puddleMesh);
+    this.group.add(this.chipMesh, this.dropMesh, this.waterMesh, this.stainMesh, this.puddleMesh);
   }
 
   /** A burst of small ceramic chips at an impact. */
@@ -165,7 +175,7 @@ export class Particles {
   }
 
   /** Tea flung out of a breaking mug. */
-  splash(at: THREE.Vector3, baseVel: THREE.Vector3, amount: number, rng = Math.random): void {
+  splash(at: THREE.Vector3, baseVel: THREE.Vector3, amount: number, rng = Math.random, water = false): void {
     const n = Math.round(amount);
     for (let i = 0; i < n; i++) {
       const dir = new THREE.Vector3(rng() - 0.5, rng() * 0.8 + 0.2, rng() - 0.5).normalize();
@@ -174,6 +184,7 @@ export class Particles {
         v: baseVel.clone().multiplyScalar(0.6).addScaledVector(dir, 0.4 + rng() * 1.8),
         s: 0.0005 + rng() * rng() * 0.0016,
         alive: true,
+        water,
       };
       if (this.drops.length < DROP_MAX) this.drops.push(drop);
       else this.drops[this.dropNext] = drop;
@@ -238,8 +249,9 @@ export class Particles {
       if (this.chipMesh.instanceColor) this.chipMesh.instanceColor.needsUpdate = true;
     }
 
-    // Droplets.
+    // Droplets (tea leaves stains; water just disappears into the surface).
     let live = 0;
+    let liveWater = 0;
     for (const d of this.drops) {
       if (!d.alive) continue;
       d.v.y += GRAVITY * dt;
@@ -247,16 +259,19 @@ export class Particles {
       const g = this.ground(d.p.x, d.p.z, d.p.y);
       if (d.p.y <= g) {
         d.alive = false;
-        this.stain(d.p.x, g, d.p.z, d.s);
+        if (!d.water) this.stain(d.p.x, g, d.p.z, d.s);
         continue;
       }
       // Stretch along velocity.
       const speed = d.v.length();
       this.tmpQ.setFromUnitVectors(this.up, this.tmpV.copy(d.v).divideScalar(speed || 1));
       this.m.compose(d.p, this.tmpQ, this.tmpS.set(d.s * 0.8, d.s * Math.min(6, 1.2 + speed * 1.3), d.s * 0.8));
-      this.dropMesh.setMatrixAt(live++, this.m);
+      if (d.water) this.waterMesh.setMatrixAt(liveWater++, this.m);
+      else this.dropMesh.setMatrixAt(live++, this.m);
     }
     this.dropMesh.count = live;
     this.dropMesh.instanceMatrix.needsUpdate = true;
+    this.waterMesh.count = liveWater;
+    this.waterMesh.instanceMatrix.needsUpdate = true;
   }
 }

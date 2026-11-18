@@ -37,6 +37,16 @@ interface MugEntry {
   /** Contact force (N) that breaks it. */
   strength: number;
   broken: boolean;
+  edge: THREE.Material;
+  onBroken?: (impact: THREE.Vector3) => void;
+}
+
+export interface MugOptions {
+  /** Material for broken edges (unglazed clay by default; glass for a glass jar). */
+  edge?: THREE.Material;
+  strength?: number;
+  /** Called after it breaks (e.g. to scatter the pens that were in it). */
+  onBroken?: (impact: THREE.Vector3) => void;
 }
 
 const CERAMIC_DENSITY = 2300; // kg/m³
@@ -89,8 +99,27 @@ export class Breakables {
     this.shardHitListeners.push(cb);
   }
 
-  addMug(group: THREE.Group, body: RAPIER.RigidBody, collider: RAPIER.Collider, design: CupDesign, profile: SampledProfile, glaze: THREE.MeshPhysicalMaterial): void {
-    const entry: MugEntry = { kind: 'mug', group, body, design, profile, glaze, strength: 34, broken: false };
+  addMug(
+    group: THREE.Group,
+    body: RAPIER.RigidBody,
+    collider: RAPIER.Collider,
+    design: CupDesign,
+    profile: SampledProfile,
+    glaze: THREE.MeshPhysicalMaterial,
+    opts: MugOptions = {},
+  ): void {
+    const entry: MugEntry = {
+      kind: 'mug',
+      group,
+      body,
+      design,
+      profile,
+      glaze,
+      strength: opts.strength ?? 34,
+      broken: false,
+      edge: opts.edge ?? bisqueMaterial,
+      onBroken: opts.onBroken,
+    };
     collider.setActiveEvents(this.physics.rapier.ActiveEvents.CONTACT_FORCE_EVENTS);
     collider.setContactForceEventThreshold(6);
     this.byCollider.set(collider.handle, entry);
@@ -199,7 +228,7 @@ export class Breakables {
     for (const [h, entry] of this.byCollider) if (entry === e) this.byCollider.delete(h);
 
     const burst = 0.35 + severity * 1.6;
-    const mats: THREE.Material[] = [e.glaze, bisqueMaterial];
+    const mats: THREE.Material[] = [e.glaze, e.edge];
     const spawn = (geometry: THREE.BufferGeometry, centroidLocal: THREE.Vector3, hull: Float32Array, mass: number, outwardLocal: THREE.Vector3) => {
       const worldPos = centroidLocal.clone().applyMatrix4(matrix);
       const mesh = new THREE.Mesh(geometry, mats);
@@ -233,7 +262,7 @@ export class Breakables {
       const col = world.createCollider(desc, rb);
       this.shardColliders.add(col.handle);
       this.physics.bind(rb, mesh);
-      this.debris.add(mesh, rb, e.glaze);
+      this.debris.add(mesh, rb, e.glaze, e.edge);
     };
 
     for (const s of shards) spawn(s.geometry, s.centroid, s.hull, s.volume * CERAMIC_DENSITY, s.outward);
@@ -270,6 +299,7 @@ export class Breakables {
       if (ground !== null && bodyPos.y - ground < 0.08) this.particles.puddle(bodyPos.x, ground, bodyPos.z, 0.11 + rng() * 0.06);
     }
 
+    e.onBroken?.(impactWorld);
     this.breaks++;
     const evt: BreakEvent = { kind: 'mug', position: impactWorld, severity, pieces: shards.length };
     for (const cb of this.breakListeners) cb(evt);

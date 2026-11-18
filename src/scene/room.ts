@@ -4,6 +4,7 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import { pbrMaterial } from './textures';
 import { createWindow, type NightWindow } from './window';
 import { createCounter } from './props/furniture';
+import { mergeStatic } from './merge';
 
 /**
  * The resident's workstation at 3:47am. Units are metres; +y up, the camera looks toward -z.
@@ -181,6 +182,9 @@ export function createRoom(): Room {
   // A whisper of fill so pure-black areas keep a little shape.
   const ambient = new THREE.HemisphereLight(0x1b2230, 0x0b0907, 0.05);
   group.add(ambient);
+
+  nightWindow.group.userData.noMerge = true;
+  mergeStatic(group);
 
   return {
     group,

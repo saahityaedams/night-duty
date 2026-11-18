@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { pbrMaterial } from '../textures';
+import { mergeStatic } from '../merge';
 
 /**
  * Room furniture: steel locker, duty-roster whiteboard, side counter.
@@ -44,8 +45,9 @@ export function createLocker(): Locker {
   panel(W, H, t, 0, H / 2, -D / 2 + t / 2, interior);
   panel(t, H - 0.07, D - 0.02, 0, H / 2 + 0.03, 0, interior); // divider
   panel(W - 2 * t, t, D - 0.02, 0, 1.45, 0, interior); // shelf
-  group.add(carcass);
   const body = carcass.children[0] as THREE.Mesh;
+  group.add(carcass);
+  mergeStatic(carcass);
 
   // Doors.
   const doors: THREE.Group[] = [];
@@ -74,6 +76,11 @@ export function createLocker(): Locker {
     slot.position.set(0, doorH / 2 - 0.32, 0.011);
     door.add(slot);
     door.position.set(side * (W / 4), 0.06 + doorH / 2 + 0.005, D / 2 + 0.01);
+    // Louvres, handle and slot become a few merged meshes (the door still detaches as one group).
+    door.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && o !== leaf) o.castShadow = false;
+    });
+    mergeStatic(door);
     group.add(door);
     doors.push(door);
   }
@@ -143,9 +150,13 @@ export function createWhiteboard(): Whiteboard {
 
   const surface = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.18, metalness: 0 });
   const frameMat = new THREE.MeshStandardMaterial({ color: 0xb4b8bc, roughness: 0.35, metalness: 0.9 });
-  const board = new THREE.Mesh(new THREE.BoxGeometry(W, H, 0.012), [frameMat, frameMat, frameMat, frameMat, surface, frameMat]);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(W, H, 0.012), frameMat);
   board.castShadow = board.receiveShadow = true;
   group.add(board);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(W, H), surface);
+  face.position.z = 0.0062;
+  face.receiveShadow = true;
+  board.add(face);
   // Frame.
   const f = 0.016;
   for (const [w, h, x, y] of [

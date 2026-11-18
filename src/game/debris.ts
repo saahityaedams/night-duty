@@ -14,6 +14,7 @@ interface Entry {
   mesh: THREE.Mesh;
   body: RAPIER.RigidBody;
   glaze: THREE.Material;
+  edge: THREE.Material;
   asleepFor: number;
   merged: boolean;
 }
@@ -32,8 +33,8 @@ export class Debris {
     private readonly edgeMaterial: THREE.Material,
   ) {}
 
-  add(mesh: THREE.Mesh, body: RAPIER.RigidBody, glaze: THREE.Material): void {
-    this.entries.push({ mesh, body, glaze, asleepFor: 0, merged: false });
+  add(mesh: THREE.Mesh, body: RAPIER.RigidBody, glaze: THREE.Material, edge: THREE.Material = this.edgeMaterial): void {
+    this.entries.push({ mesh, body, glaze, edge, asleepFor: 0, merged: false });
   }
 
   get count(): number {
@@ -114,7 +115,7 @@ export class Debris {
       }
       if (!members.length) continue;
       const geometry = mergeTwoGroups(members.map((e) => e.mesh));
-      const batch = new THREE.Mesh(geometry, [glaze, this.edgeMaterial]);
+      const batch = new THREE.Mesh(geometry, [glaze, members[0].edge]);
       batch.castShadow = true;
       batch.receiveShadow = true;
       batch.matrixAutoUpdate = false;

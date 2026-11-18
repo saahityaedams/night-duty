@@ -13,6 +13,8 @@ import { createMouse, createSheet } from './scene/props/deskItems';
 import { createRoomEnvironment } from './scene/environment';
 import { PaperStorm } from './fx/paper';
 import { createRoomObjects } from './game/objects';
+import { PEN_JAR, createPens, glassJarMaterial, glassEdgeMaterial } from './scene/props/smallItems';
+import { detachParts } from './game/damage';
 import { Particles } from './fx/particles';
 import { Breakables } from './game/breakables';
 import { Grab } from './game/grab';
@@ -166,6 +168,7 @@ async function main() {
     [0.03, -0.08, -1.0],
   ];
   let round = 0;
+  let roundBodies: RAPIER.RigidBody[] = [];
 
   const spawnMug = (x: number, z: number, rot: number, glaze: THREE.ColorRepresentation, animate: boolean) => {
     const cup = createCupMesh(MUG, glaze);
@@ -190,6 +193,7 @@ async function main() {
     world.createCollider(rapier.ColliderDesc.cuboid(0.012, 0.03, 0.005).setTranslation(0.058, 0.05, 0).setDensity(1100), body);
     physics.bind(body, cup.group);
     breakables.addMug(cup.group, body, col, MUG, cup.profile, cup.glaze);
+    roundBodies.push(body);
     cup.group.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) pickable.set(o, body);
     });
@@ -200,12 +204,41 @@ async function main() {
   };
 
   const spawnRound = (animate: boolean) => {
+    roundBodies = [];
     // Debris lying where a mug will appear would overlap its collider and jitter forever.
     for (const [x, z] of cupSpots) breakables.clearArea(x, z, 0.09);
     cupSpots.forEach(([x, z, rot], i) => spawnMug(x, z, rot + round * 0.7, GLAZES[(i + round * 2) % GLAZES.length], animate));
     round++;
   };
   spawnRound(false);
+
+  // Glass pen jar: shatters like a mug, in glass, and the pens scatter.
+  {
+    const jar = createCupMesh(PEN_JAR);
+    jar.group.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).material = glassJarMaterial;
+    });
+    const pens = createPens();
+    jar.group.add(pens);
+    const x = -0.17;
+    const z = -0.64;
+    jar.group.position.set(x, ROOM.desk.top, z);
+    scene.add(jar.group);
+    const body = world.createRigidBody(rapier.RigidBodyDesc.dynamic().setTranslation(x, ROOM.desk.top, z).setCcdEnabled(true).setAngularDamping(0.3));
+    const col = world.createCollider(
+      rapier.ColliderDesc.cylinder(0.053, 0.036).setTranslation(0, 0.053, 0).setDensity(1800).setFriction(0.5).setRestitution(0.1),
+      body,
+    );
+    physics.bind(body, jar.group);
+    breakables.addMug(jar.group, body, col, PEN_JAR, jar.profile, glassJarMaterial, {
+      edge: glassEdgeMaterial,
+      strength: 26,
+      onBroken: (impact) => detachParts(physics, scene, [...pens.children], impact, { burst: 1.4, density: 900, spin: 14 }),
+    });
+    jar.group.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) pickable.set(o, body);
+    });
+  }
 
   // --- Feel, audio, input ----------------------------------------------------------------------
   const timefx = new TimeFx();
@@ -225,7 +258,7 @@ async function main() {
     shake.add(0.22 + e.severity * 0.5);
     haptics.tick(0.5 + e.severity * 0.5);
     breakables.trimShards(MAX_SHARDS);
-    if (breakables.intactCount === 0) respawnAt = performance.now() + 2200;
+    if (roundBodies.every((b) => !breakables.isIntact(b))) respawnAt = performance.now() + 2200;
   });
   breakables.onShardHit((e) => {
     if (e.intact) audio.knock(e.force, panOf(e.position));
@@ -394,6 +427,7 @@ async function main() {
     });
     return out;
   };
+  (window as unknown as { __ndScene: THREE.Scene }).__ndScene = scene;
   hooks.ready = true;
 }
 
