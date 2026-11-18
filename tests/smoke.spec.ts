@@ -81,3 +81,13 @@ test('frame time and scene cost stay inside budget during a three-mug break', as
   expect(s.drawCalls).toBeLessThan(400);
   expect(s.triangles).toBeLessThan(700_000);
 });
+
+test('audio unlocks on the first touch and every sample decodes', async ({ page }) => {
+  await boot(page);
+  const box = (await page.locator('#game').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.1); // empty area: no throw
+  await expect.poll(async () => (await page.evaluate(() => window.__nd.audio())).loaded, { timeout: 10_000 }).toBe(true);
+  const a = await page.evaluate(() => window.__nd.audio());
+  expect(a.samples).toEqual({ break: 18, debris: 3, clink: 3 });
+  expect(['running', 'suspended']).toContain(a.state);
+});

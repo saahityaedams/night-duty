@@ -30,6 +30,7 @@ interface TestHooks {
   /** Breaks every intact mug at once (for screenshots and tests). */
   breakAll(force?: number): number;
   counts(): { intact: number; breaks: number; shards: number };
+  audio(): { state: string; loaded: boolean; samples: Record<string, number> };
   /** Normalized screen positions (0..1) of intact mugs' centres. */
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
@@ -52,6 +53,7 @@ const hooks: TestHooks = {
   breakAll: () => 0,
   counts: () => ({ intact: 0, breaks: 0, shards: 0 }),
   mugScreenPositions: () => [],
+  audio: () => ({ state: 'none', loaded: false, samples: {} }),
   awakeBodies: () => [],
 };
 window.__nd = hooks;
@@ -314,6 +316,7 @@ async function main() {
     return n;
   };
   hooks.counts = () => ({ intact: breakables.intactCount, breaks: breakables.breaks, shards: breakables.shardCount });
+  hooks.audio = () => audio.info();
   hooks.mugScreenPositions = () => {
     const out: { x: number; y: number }[] = [];
     for (const body of new Set(pickable.values())) {

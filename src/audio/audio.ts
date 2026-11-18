@@ -95,6 +95,15 @@ export class AudioEngine {
     return this.loaded;
   }
 
+  /** Diagnostics for tests. */
+  info(): { state: string; loaded: boolean; samples: Record<string, number> } {
+    return {
+      state: this.ctx?.state ?? 'none',
+      loaded: this.loaded,
+      samples: { break: this.buffers.break.length, debris: this.buffers.debris.length, clink: this.buffers.clink.length },
+    };
+  }
+
   private pick(cat: Category): { buf: AudioBuffer; gain: number } | null {
     const list = this.buffers[cat];
     if (!list.length) return null;
