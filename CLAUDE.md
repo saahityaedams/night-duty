@@ -38,15 +38,22 @@ Read it with the Claude Docs tools before changing gameplay, art, audio or text.
 - `assets-src/`: source assets before processing
 - `public/_headers`: noindex and caching headers for Cloudflare
 
+## Session arc
+
+- `src/game/arc.ts` owns the session: warm-up -> bat -> printer reveal -> hammer/locker reveal -> meter -> finale -> silence -> Pending: 0 -> dawn -> ending. Thresholds live in `src/game/arcConfig.ts`.
+- Preview links: `?all=1` unlocks every tool and view; `?shot=desk|deskWide|left|right|finale|dawn` (case-insensitive) also unlocks everything.
+- Words outside the 3D scene: `src/content/text.ts`, including `PERSONAL_MESSAGE` (empty until the owner writes it).
+- Music: drop `build_1.m4a`, `build_2.m4a`, `build_3.m4a` (same tempo/key, rising intensity), `finale.m4a` and `dawn.m4a` into `public/music/`; `src/audio/score.ts` uses them automatically, otherwise a generative placeholder plays.
+- Offline: `npm run build` runs `tools/gen-sw.mjs`, which precaches every file in `dist/` (bump `SW_REV` when changing caching logic).
+
 ## Known follow-ups
 
 - Rapier compat inlines its 2.9MB WASM as base64 (4.9MB script, 1.8MB gzipped). Load the `.wasm` file separately before shipping.
-- Textures are 1k JPGs (~3.4MB). Convert to KTX2 before shipping.
+- Textures are compressed JPGs (~0.5MB total). KTX2 would save GPU memory but isn't needed at this size.
 - The resting scene is ~150 draw calls. Merge static set dressing (keyboard, papers, room) with baked lighting in milestone 2.
 - Sound one-shots were picked by title and loudness envelope, not by ear. The owner should listen and flag bad ones (`public/audio/`, sources in `CREDITS.md`).
 - The iOS haptic workaround (`Haptics` in `src/game/juice.ts`) is unverified on a real iPhone.
-- The monitor doesn't react to hits yet (screen crack, flicker): milestone 2.
-- Mugs respawn in rounds as a prototype convenience; the real escalation is milestone 3.
+- "Another shift?" fades out and reloads the page (instant from the offline cache) instead of rewinding the room.
 
 ## Visual iteration
 

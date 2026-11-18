@@ -494,6 +494,18 @@ async function main() {
     return out;
   };
   (window as unknown as { __ndScene: THREE.Scene }).__ndScene = scene;
+
+  // Fade in once textures have loaded (or after a short grace period on a slow network).
+  const boot = document.getElementById('boot');
+  const reveal = () => boot?.classList.add('done');
+  THREE.DefaultLoadingManager.onLoad = reveal;
+  setTimeout(reveal, 2500);
+
+  // Offline play after the first visit (not in dev, not under automated tests).
+  if (import.meta.env.PROD && 'serviceWorker' in navigator && !navigator.webdriver) {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
+  }
+
   hooks.ready = true;
 }
 

@@ -14,7 +14,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Night Duty" />
     <meta name="format-detection" content="telephone=no" />
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/png" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Night Duty</title>
     <style>
       html,
@@ -64,6 +66,18 @@
             0 0 0 11px #24262b,
             0 30px 80px rgba(0, 0, 0, 0.8);
         }
+      }
+
+      /* Fade in from black once the room is ready. */
+      #boot {
+        position: absolute;
+        inset: 0;
+        background: #030406;
+        pointer-events: none;
+        transition: opacity 1.4s ease;
+      }
+      #boot.done {
+        opacity: 0;
       }
 
       /* --- HUD: icons only, quiet until touched ------------------------------------------- */
@@ -352,7 +366,7 @@
     </style>
   </head>
   <body>
-    <div id="stage"><canvas id="game"></canvas></div>
+    <div id="stage"><canvas id="game"></canvas><div id="boot"></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
