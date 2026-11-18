@@ -21,8 +21,8 @@ export interface Monitor {
   ui: ScreenUi;
   screenMaterial: THREE.MeshStandardMaterial;
   glow: THREE.RectAreaLight;
-  /** Box used for the static collider, in the monitor's local space. */
-  collider: { half: THREE.Vector3; center: THREE.Vector3 };
+  /** Boxes for static colliders (panel, neck, base), in the monitor's local space. */
+  colliders: { half: THREE.Vector3; center: THREE.Vector3; tiltX?: number }[];
 }
 
 export function createMonitor(): Monitor {
@@ -92,9 +92,11 @@ export function createMonitor(): Monitor {
     ui,
     screenMaterial,
     glow,
-    collider: {
-      half: new THREE.Vector3(MONITOR.panelW / 2, MONITOR.panelH / 2 + 0.04, 0.05),
-      center: new THREE.Vector3(0, MONITOR.screenCenterY - 0.03, -0.04),
-    },
+    colliders: [
+      // Panel, tilted like the mesh; front face sits on the screen glass.
+      { half: new THREE.Vector3(MONITOR.panelW / 2, MONITOR.panelH / 2, 0.02), center: new THREE.Vector3(0, MONITOR.screenCenterY, -0.046), tiltX: MONITOR.tilt },
+      { half: new THREE.Vector3(0.03, 0.12, 0.011), center: new THREE.Vector3(0, 0.13, -0.055), tiltX: -0.12 },
+      { half: new THREE.Vector3(0.115, 0.006, 0.09), center: new THREE.Vector3(0, 0.006, 0) },
+    ],
   };
 }

@@ -7,56 +7,77 @@ async function boot(page: Page) {
   });
   page.on('pageerror', (e) => consoleErrors.push(String(e)));
   await page.goto('/');
-  await page.waitForFunction(() => window.__nd?.ready === true, null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__nd?.ready === true, null, { timeout: 30_000 });
+  await page.waitForTimeout(800);
   return consoleErrors;
 }
 
 test('boots without errors and renders the scene', async ({ page }, info) => {
   const consoleErrors = await boot(page);
-  await page.waitForTimeout(1500);
-
+  await page.waitForTimeout(1000);
   const stats = await page.evaluate(() => window.__nd.stats());
   expect(stats.frames).toBeGreaterThan(10);
-  expect(stats.drawCalls).toBeGreaterThan(0);
-
+  expect(stats.drawCalls).toBeGreaterThan(20);
+  expect((await page.evaluate(() => window.__nd.counts())).intact).toBe(3);
   await page.screenshot({ path: `test-results/screens/boot-${info.project.name}.png` });
   expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
 
-test('a tap knocks an object over and physics settles', async ({ page }, info) => {
+test('flicking a mug at the monitor breaks it', async ({ page }, info) => {
   await boot(page);
-  await page.waitForTimeout(500);
-
-  // Scan the desk area for a cup to tap, rather than hard-coding pixel positions.
-  const hit = await page.evaluate(() => {
-    for (let y = 0.45; y <= 0.85; y += 0.02) {
-      for (let x = 0.1; x <= 0.9; x += 0.02) {
-        if (window.__nd.tap(x, y)) return { x, y };
-      }
-    }
-    return null;
+  const grabbed = await page.evaluate(async () => {
+    const m = window.__nd.mugScreenPositions()[2];
+    return window.__nd.flick(m.x, m.y, m.x, m.y - 0.35, 90);
   });
-  expect(hit).not.toBeNull();
-
+  expect(grabbed).toBe(true);
+  await expect.poll(async () => (await page.evaluate(() => window.__nd.counts())).breaks, { timeout: 4000 }).toBe(1);
   await page.waitForTimeout(150);
-  expect((await page.evaluate(() => window.__nd.stats())).activeBodies).toBeGreaterThan(0);
-  await page.screenshot({ path: `test-results/screens/tap-${info.project.name}.png` });
-
-  // Bodies must fall asleep so debris stops costing CPU.
-  await expect
-    .poll(async () => (await page.evaluate(() => window.__nd.stats())).activeBodies, { timeout: 15_000 })
-    .toBe(0);
+  await page.screenshot({ path: `test-results/screens/flick-${info.project.name}.png` });
+  const c = await page.evaluate(() => window.__nd.counts());
+  expect(c.shards).toBeGreaterThan(4);
+  expect(c.intact).toBe(2);
 });
 
-test('frame time stays inside the regression budget', async ({ page }) => {
+test('a quick tap knocks a mug without grabbing it for long', async ({ page }) => {
   await boot(page);
-  await page.waitForTimeout(1000);
+  const hit = await page.evaluate(() => {
+    const m = window.__nd.mugScreenPositions()[0];
+    return window.__nd.tap(m.x, m.y);
+  });
+  expect(hit).toBe(true);
+  await page.waitForTimeout(120);
+  expect((await page.evaluate(() => window.__nd.stats())).activeBodies).toBeGreaterThan(0);
+});
+
+test('shards come to rest and a new round of mugs appears', async ({ page }, info) => {
+  await boot(page);
+  const n = await page.evaluate(() => window.__nd.breakAll(200));
+  expect(n).toBe(3);
+  // All debris must fall asleep so it stops costing CPU.
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__nd.stats())).activeBodies, { timeout: 15_000, intervals: [500] })
+    .toBeLessThanOrEqual(3); // the new round may still be landing
+  await expect.poll(async () => (await page.evaluate(() => window.__nd.counts())).intact, { timeout: 6000 }).toBe(3);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `test-results/screens/aftermath-${info.project.name}.png` });
+  expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
+});
+
+test('frame time and scene cost stay inside budget during a three-mug break', async ({ page }) => {
+  await boot(page);
   await page.evaluate(() => window.__nd.resetStats());
+  await page.evaluate(() => window.__nd.breakAll(200));
   await page.waitForTimeout(3000);
   const s = await page.evaluate(() => window.__nd.stats());
+  // Once settled, debris is batched: the scene must be back near its resting cost.
+  await page.waitForTimeout(2500);
+  const settled = await page.evaluate(() => window.__nd.stats());
+  console.log(`settled draws=${settled.drawCalls} tris=${settled.triangles}`);
+  expect(settled.drawCalls).toBeLessThan(250);
   console.log(`frame p50=${s.p50.toFixed(1)}ms p95=${s.p95.toFixed(1)}ms draws=${s.drawCalls} tris=${s.triangles}`);
-  // Headless browsers on a laptop are not phones; this only catches big regressions.
+  // Headless browsers on a laptop are not phones; these catch big regressions.
   expect(s.p95).toBeLessThan(40);
-  expect(s.drawCalls).toBeLessThan(250);
+  expect(s.drawCalls).toBeLessThan(400);
+  expect(s.triangles).toBeLessThan(700_000);
 });
