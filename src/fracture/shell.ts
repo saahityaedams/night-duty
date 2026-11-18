@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { surfacePoint, type SampledProfile } from '../scene/props/cup';
+import { clipHalfPlane, jag, polyArea, type V2 } from './voronoi2d';
 
 /**
  * Shell fracture for thin-walled objects turned on a lathe (mugs, cups, jars, vases).
@@ -35,7 +36,6 @@ export interface Shard {
   outward: THREE.Vector3;
 }
 
-type V2 = [number, number];
 
 export function fractureShell(o: ShellFractureOptions): Shard[] {
   const { profile, thickness, rng } = o;
@@ -75,66 +75,15 @@ export function fractureShell(o: ShellFractureOptions): Shard[] {
       }
     }
     if (poly.length < 3 || Math.abs(polyArea(poly)) < 1e-5) continue;
-    const shard = buildShard(jag(poly, rng), Cu, profile, thickness);
+    // Rim (v = 1) and base (v = 0) edges stay straight; everything else breaks irregularly.
+    const straight = (a: V2, b: V2) => (Math.abs(a[1] - 1) < 1e-4 && Math.abs(b[1] - 1) < 1e-4) || (a[1] < 1e-4 && b[1] < 1e-4);
+    const shard = buildShard(jag(poly, rng, 0.035, straight, [0, 1]), Cu, profile, thickness);
     if (shard) shards.push(shard);
   }
   return shards;
 }
 
 // ---------------------------------------------------------------------------------------------
-
-function clipHalfPlane(poly: V2[], keep: V2, other: V2): V2[] {
-  // Keep the side of the bisector closest to `keep`.
-  const nx = other[0] - keep[0];
-  const ny = other[1] - keep[1];
-  const mx = (keep[0] + other[0]) / 2;
-  const my = (keep[1] + other[1]) / 2;
-  const side = (p: V2) => (p[0] - mx) * nx + (p[1] - my) * ny; // <= 0 keeps
-  const out: V2[] = [];
-  for (let k = 0; k < poly.length; k++) {
-    const a = poly[k];
-    const b = poly[(k + 1) % poly.length];
-    const da = side(a);
-    const db = side(b);
-    if (da <= 0) out.push(a);
-    if (da <= 0 !== db <= 0) {
-      const t = da / (da - db);
-      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-    }
-  }
-  return out;
-}
-
-/** Breaks long straight cell edges into slightly irregular ones, except along the rim and base. */
-function jag(poly: V2[], rng: () => number): V2[] {
-  const out: V2[] = [];
-  for (let k = 0; k < poly.length; k++) {
-    const a = poly[k];
-    const b = poly[(k + 1) % poly.length];
-    out.push(a);
-    const onBoundary = (Math.abs(a[1] - 1) < 1e-4 && Math.abs(b[1] - 1) < 1e-4) || (a[1] < 1e-4 && b[1] < 1e-4);
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const steps = onBoundary ? 0 : Math.floor(len / 0.035);
-    for (let s = 1; s <= steps; s++) {
-      const t = s / (steps + 1);
-      const px = -(b[1] - a[1]) / len;
-      const py = (b[0] - a[0]) / len;
-      const amp = (rng() - 0.5) * 0.35 * (len / (steps + 1));
-      out.push([a[0] + (b[0] - a[0]) * t + px * amp, clamp01(a[1] + (b[1] - a[1]) * t + py * amp)]);
-    }
-  }
-  return out;
-}
-
-function polyArea(p: V2[]): number {
-  let a = 0;
-  for (let k = 0; k < p.length; k++) {
-    const [x1, y1] = p[k];
-    const [x2, y2] = p[(k + 1) % p.length];
-    a += x1 * y2 - x2 * y1;
-  }
-  return a / 2;
-}
 
 const MAX_EDGE = 0.045; // metric units; enough to follow the curve without wasting triangles
 

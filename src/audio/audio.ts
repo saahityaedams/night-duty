@@ -168,6 +168,21 @@ export class AudioEngine {
     this.play('clink', v, (small ? 1.25 : 0.95) + Math.random() * 0.35, pan * 0.6);
   }
 
+  /** A room object breaking. Uses the closest recorded material until dedicated sets are added. */
+  breakObject(material: string, severity: number, pan: number): void {
+    const rate = material === 'glass' ? 1.25 : material === 'metal' ? 0.6 : material === 'paper' ? 1.6 : 0.85;
+    if (material !== 'paper') this.play('break', 0.6 + severity * 0.4, rate + Math.random() * 0.1, pan * 0.6);
+    this.thump(material === 'metal' ? 0.8 : 0.45 + severity * 0.3);
+    this.play('debris', 0.3 + severity * 0.3, rate, pan * 0.5, 0.12);
+  }
+
+  /** A room object taking a hit without breaking. */
+  hitObject(material: string, strength: number, pan: number): void {
+    const rate = material === 'metal' ? 0.5 : material === 'glass' ? 1.4 : material === 'paper' ? 1.8 : 0.8;
+    this.play('clink', 0.25 + strength * 0.4, rate + Math.random() * 0.1, pan * 0.6);
+    this.thump(0.2 + strength * 0.4);
+  }
+
   /** Mug knocked or set down without breaking: a short ceramic knock. */
   knock(force: number, pan: number): void {
     this.play('clink', Math.min(0.6, 0.12 + force / 50), 0.75 + Math.random() * 0.15, pan * 0.6);

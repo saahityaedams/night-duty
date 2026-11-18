@@ -9,10 +9,10 @@ import { createRoom, ROOM } from './scene/room';
 import { createMonitor } from './scene/props/monitor';
 import { createCupMesh, GLAZES, MUG } from './scene/props/cup';
 import { CameraRig, SHOTS, type ShotName } from './scene/camera';
-import { createKeyboard, createMouse, createPaperStack, createCaseFile, createSheet } from './scene/props/deskItems';
+import { createMouse, createSheet } from './scene/props/deskItems';
 import { createRoomEnvironment } from './scene/environment';
-import { createLocker, createWhiteboard } from './scene/props/furniture';
-import { createPrinter, createTower, createPhone, createAlarmClock } from './scene/props/electronics';
+import { PaperStorm } from './fx/paper';
+import { createRoomObjects } from './game/objects';
 import { Particles } from './fx/particles';
 import { Breakables } from './game/breakables';
 import { Grab } from './game/grab';
@@ -37,6 +37,10 @@ interface TestHooks {
   setDawn(v: number): void;
   /** Moves the camera to a named shot (seconds = 0 cuts). */
   shot(name: string, seconds?: number): void;
+  /** Hits a named room object with a force (N), as if struck at its centre. */
+  hitObject(name: string, force: number): boolean;
+  /** Names of room objects and whether each is broken. */
+  objects(): { name: string; broken: boolean }[];
   /** Normalized screen positions (0..1) of intact mugs' centres. */
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
@@ -62,6 +66,8 @@ const hooks: TestHooks = {
   audio: () => ({ state: 'none', loaded: false, samples: {} }),
   setDawn: () => {},
   shot: () => {},
+  hitObject: () => false,
+  objects: () => [],
   awakeBodies: () => [],
 };
 window.__nd = hooks;
@@ -101,7 +107,7 @@ async function main() {
   const monitor = createMonitor();
   monitor.group.position.set(0.02, ROOM.desk.top, ROOM.wallZ + 0.19);
   scene.add(monitor.group);
-  for (const c of monitor.colliders) {
+  for (const c of monitor.colliders.slice(1)) {
     const p = monitor.group.position;
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(c.tiltX ?? 0, 0, 0));
     world.createCollider(
@@ -128,58 +134,27 @@ async function main() {
       }
       return o;
     };
-    add(createKeyboard(), 0.0, -0.355, 0.03, 0, [0.22, 0.012, 0.07]);
     add(createMouse(), 0.285, -0.37, -0.12, 0, [0.03, 0.016, 0.056]);
-    add(createCaseFile('Ward 4 · Night'), -0.37, -0.53, 0.22, 0, [0.117, 0.004, 0.16]);
-    add(createPaperStack(60, 7), -0.33, -0.5, 0.32, 0.0075);
     add(createSheet('DISCHARGE SUMMARY', 4), 0.3, -0.17, -0.42, 0.0002);
-
-    // Electronics on the desk (static for now; breakable later in milestone 2).
-    const tower = createTower();
-    add(tower.group, -0.6, -0.55, 0.0, 0, [tower.half.x, tower.half.y, tower.half.z]);
-    const phone = createPhone();
-    add(phone.group, 0.36, -0.14, -0.3, 0.0004, [phone.half.x, phone.half.y, phone.half.z]);
-    const clock = createAlarmClock();
-    add(clock.group, 0.37, -0.6, -0.45, 0, [clock.half.x, clock.half.y, clock.half.z]);
-
-    // Locker against the back wall, left of the desk.
-    const locker = createLocker();
-    locker.group.position.set(-1.04, 0, ROOM.wallZ + locker.size.z / 2 + 0.01);
-    scene.add(locker.group);
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(locker.size.x / 2, locker.size.y / 2, locker.size.z / 2).setTranslation(locker.group.position.x, locker.size.y / 2, locker.group.position.z),
-    );
-
-    // Printer on the side counter, roster whiteboard on the wall above it.
-    const printer = createPrinter();
-    const counterX = (ROOM.desk.width / 2 + 0.02 + ROOM.rightWallX) / 2;
-    printer.group.position.set(counterX, ROOM.desk.top, ROOM.wallZ + 0.24);
-    printer.group.rotation.y = -0.15;
-    scene.add(printer.group);
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(printer.half.x, printer.half.y, printer.half.z)
-        .setTranslation(counterX, ROOM.desk.top + printer.half.y, ROOM.wallZ + 0.24)
-        .setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.15, 0))),
-    );
-    const board = createWhiteboard();
-    board.group.position.set(counterX, 1.42, ROOM.wallZ + 0.012);
-    scene.add(board.group);
   }
 
   // Particles land on the desk if they're above it, otherwise on the floor.
   const deskZ0 = ROOM.wallZ;
   const deskZ1 = ROOM.wallZ + ROOM.desk.depth;
-  const particles = new Particles((x, z, y) => {
+  const counterX0 = ROOM.desk.width / 2 + 0.02;
+  const groundAt = (x: number, z: number, y: number) => {
     const onDesk = Math.abs(x) < ROOM.desk.width / 2 && z > deskZ0 && z < deskZ1 && y >= ROOM.desk.top - 0.02;
-    return onDesk ? ROOM.desk.top : 0;
-  });
+    const onCounter = x > counterX0 && x < ROOM.rightWallX && z > deskZ0 && z < deskZ0 + 0.55 && y >= ROOM.desk.top - 0.02;
+    return onDesk || onCounter ? ROOM.desk.top : 0;
+  };
+  const particles = new Particles(groundAt);
   scene.add(particles.group);
+  const paper = new PaperStorm(groundAt);
+  scene.add(paper.mesh);
+  const objects = createRoomObjects({ scene, physics, particles, paper, monitor, monitorPosition: monitor.group.position.clone() });
 
   const breakables = new Breakables(physics, scene, particles);
-  breakables.groundAt = (x, z, y) => {
-    const onDesk = Math.abs(x) < ROOM.desk.width / 2 && z > deskZ0 && z < deskZ1 && y >= ROOM.desk.top - 0.02;
-    return onDesk ? ROOM.desk.top : 0;
-  };
+  breakables.groundAt = groundAt;
 
   // --- Mugs ----------------------------------------------------------------------------------
   const pickable = new Map<THREE.Object3D, RAPIER.RigidBody>();
@@ -257,11 +232,27 @@ async function main() {
     else audio.clink(e.force, panOf(e.position));
   });
 
+  objects.onEvent((e) => {
+    const pan = panOf(e.point);
+    if (e.kind === 'break') {
+      const sev = Math.min(1, e.force / 200);
+      timefx.hitStop(45 + sev * 50);
+      if (e.name === 'monitor' || e.name === 'printer' || e.name === 'locker') timefx.slowMo(0.35, 600);
+      shake.add(0.3 + sev * 0.45);
+      haptics.tick(0.7 + sev * 0.3);
+      audio.breakObject(e.material, sev, pan);
+    } else {
+      shake.add(e.kind === 'stage' ? 0.22 : 0.08);
+      haptics.tick(e.kind === 'stage' ? 0.5 : 0.25);
+      audio.hitObject(e.material, Math.min(1, e.force / 150), pan);
+    }
+  });
+
   const grab = new Grab({
     physics,
     camera,
     element: canvas,
-    pickable: () => pickable,
+    pickable: () => new Map([...pickable, ...objects.grabbable]),
     minHeight: ROOM.desk.top + 0.03,
     onGrab: () => haptics.tick(0.2),
     aimTarget: new THREE.Vector3(monitor.group.position.x, 0, monitor.group.position.z),
@@ -292,7 +283,9 @@ async function main() {
     physics.step(dt);
     breakables.flush();
     breakables.update(dt);
+    objects.update(dt, timer.getElapsed());
     particles.update(dt);
+    paper.update(dt, timer.getElapsed());
 
     for (let i = appearing.length - 1; i >= 0; i--) {
       const a = appearing[i];
@@ -361,6 +354,17 @@ async function main() {
   hooks.counts = () => ({ intact: breakables.intactCount, breaks: breakables.breaks, shards: breakables.shardCount });
   hooks.audio = () => audio.info();
   hooks.setDawn = (v) => room.window.setDawn(v);
+  hooks.hitObject = (name, force) => {
+    const t = objects.targets.find((x) => x.name === name);
+    if (!t || objects.damage.isBroken(t)) return false;
+    // Some colliders are removed as an object comes apart (a door tears off); use one that's left.
+    const alive = t.colliders.find((col) => world.getCollider(col.handle) === col) ?? null;
+    if (!alive) return false;
+    const c = alive.translation();
+    objects.damage.apply(t, new THREE.Vector3(c.x + (Math.random() - 0.5) * 0.04, c.y + (Math.random() - 0.5) * 0.04, c.z + 0.05), force);
+    return true;
+  };
+  hooks.objects = () => objects.targets.map((t) => ({ name: t.name, broken: objects.damage.isBroken(t) }));
   hooks.shot = (name, seconds = 0) => {
     if (name in SHOTS) rig.go(name as ShotName, seconds);
   };
