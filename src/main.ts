@@ -54,6 +54,8 @@ interface TestHooks {
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
   awakeBodies(): { p: number[]; v: number[]; w: number[] }[];
+  /** Tool strikes so far: swings that connected with something, and all swings. */
+  strikes: { hit: number; swings: number };
 }
 
 declare global {
@@ -80,6 +82,7 @@ const hooks: TestHooks = {
   arc: () => ({ stage: '', progress: 0, shot: '', tool: '' }),
   arcAdd: () => {},
   awakeBodies: () => [],
+  strikes: { hit: 0, swings: 0 },
 };
 window.__nd = hooks;
 window.addEventListener('error', (e) => hooks.errors.push(String(e.message)));
@@ -326,8 +329,12 @@ async function main() {
     haptics.tick(0.15);
   };
   hud.onTool(selectTool);
-  tools.onSwing((tool, strength) => audio.whoosh(strength, tool === 'hammer'));
+  tools.onSwing((tool, strength) => {
+    hooks.strikes.swings++;
+    audio.whoosh(strength, tool === 'hammer');
+  });
   tools.onStrike((e) => {
+    if (e.hitSomething) hooks.strikes.hit++;
     if (e.tool === 'hammer') {
       timefx.hitStop(40 + (e.force / 420) * 60);
       shake.add(0.25 + (e.force / 420) * 0.45);

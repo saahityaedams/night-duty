@@ -21,17 +21,31 @@ export function installMobileBehaviour(stage: HTMLElement): void {
   document.addEventListener('touchmove', block, { passive: false });
   document.addEventListener('selectstart', block);
 
+  // Chrome only grants fullscreen and history entries from a gesture that ends (pointerup), not
+  // from pointerdown on touch.
   let firstTouch = true;
+  let guarded = false;
   stage.addEventListener(
-    'pointerdown',
+    'pointerup',
     () => {
-      if (!firstTouch) return;
-      firstTouch = false;
-      if (isTouch && !isIOS && !isStandalone) void enterFullscreen();
-      void keepAwake();
+      if (firstTouch) {
+        firstTouch = false;
+        void keepAwake();
+      }
+      // Back-swipe guard: one extra history entry, so Android's back gesture (easy to trigger
+      // mid-swing from the screen edge) lands here instead of leaving the game.
+      if (!guarded) {
+        guarded = true;
+        history.pushState({ nightDuty: true }, '');
+      }
+      // The back gesture also drops fullscreen; the next touch brings it back.
+      if (isTouch && !isIOS && !isStandalone && !document.fullscreenElement) void enterFullscreen();
     },
     { capture: true },
   );
+  window.addEventListener('popstate', () => {
+    guarded = false; // re-armed on the next touch
+  });
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && !firstTouch) void keepAwake();

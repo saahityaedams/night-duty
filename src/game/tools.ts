@@ -34,6 +34,16 @@ interface Options {
 
 const BAT_FORCE_PER_SPEED = 95; // N per (screen heights / s)
 const BAT_MAX_FORCE = 260;
+/** Even a gentle swipe breaks a mug (strength ~30 N). */
+const BAT_MIN_FORCE = 70;
+/** Screen heights per second; anything slower is a drag, not a swing. */
+const BAT_MIN_SPEED = 0.25;
+/** A tap with the bat: a short chop at whatever is under the finger. */
+const BAT_TAP_FORCE = 120;
+/** Forgiveness: the swing connects with anything within this distance (m) of the finger's ray. */
+const BAT_REACH = 0.06;
+/** How long the swipe streak lingers (ms). */
+const TRAIL_MS = 200;
 const HAMMER_MIN = 110;
 const HAMMER_MAX = 420;
 const HAMMER_CHARGE_S = 0.9;
@@ -54,6 +64,12 @@ export class Tools {
   private readonly bat: THREE.Group;
   private readonly hammer: THREE.Group;
   private batAnim = { t: 1, from: 0, to: 0 };
+  /** The current bat gesture has already swung (animation and whoosh fired). */
+  private swung = false;
+  private readonly trail: HTMLCanvasElement;
+  private trailPts: { x: number; y: number; t: number }[] = [];
+  private hint: HTMLDivElement | null = null;
+  private trailDirty = false;
   private hammerAnim = { t: 1, target: new THREE.Vector3() };
   private readonly ray = new THREE.Raycaster();
 
@@ -70,6 +86,11 @@ export class Tools {
     this.ring = document.createElement('div');
     this.ring.className = 'charge-ring';
     o.stage.appendChild(this.ring);
+
+    // The swipe streak: a fading line under the finger while swinging the bat.
+    this.trail = document.createElement('canvas');
+    this.trail.className = 'swipe-trail';
+    o.stage.appendChild(this.trail);
 
     const el = o.element;
     el.addEventListener('pointerdown', (e) => this.down(e));
@@ -102,6 +123,8 @@ export class Tools {
     this.pointerId = e.pointerId;
     this.path = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }];
     this.struck.clear();
+    this.swung = false;
+    if (this.current === 'bat') this.trailPts.push({ x: e.clientX, y: e.clientY, t: performance.now() });
     if (this.current === 'hammer') {
       this.chargeStart = e.timeStamp;
       const r = this.rect();
@@ -133,12 +156,18 @@ export class Tools {
       const a = this.path[0];
       const dx = e.clientX - a.x;
       const dy = e.clientY - a.y;
-      if (Math.hypot(dx, dy) > 20) {
-        const ang = Math.atan2(-dy, dx);
-        this.batAnim = { t: 0, from: ang + Math.PI * 0.55, to: ang - Math.PI * 0.55 };
-        this.bat.visible = true;
-        const speed = this.speedOf(this.path.slice(-6));
-        for (const cb of this.swingListeners) cb('bat', Math.min(1, speed / 3));
+      if (this.swung) {
+        // Already swung mid-gesture.
+      } else if (Math.hypot(dx, dy) > 20) {
+        this.swing(dx, dy, Math.min(1, this.speedOf(this.path.slice(-6)) / 3));
+      } else {
+        // A tap: chop down at whatever is under the finger.
+        this.swing(1, 0.6, 0.6);
+        const hit = this.castFat(e.clientX, e.clientY);
+        if (hit) {
+          const dir = this.ray.ray.direction.clone().add(new THREE.Vector3(0, -0.6, 0)).normalize();
+          this.strike(hit.collider, hit.point, BAT_TAP_FORCE, dir, 'bat');
+        }
       }
     } else if (this.current === 'hammer') {
       this.ring.classList.remove('on');
@@ -172,18 +201,31 @@ export class Tools {
     return Math.hypot(b.x - a.x, b.y - a.y) / this.rect().height / dt;
   }
 
+  /** Starts the bat's swing animation across the view in the swipe direction, once per gesture. */
+  private swing(dx: number, dy: number, strength: number): void {
+    if (this.swung) return;
+    this.swung = true;
+    const ang = Math.atan2(-dy, dx);
+    this.batAnim = { t: 0, from: ang + Math.PI * 0.55, to: ang - Math.PI * 0.55 };
+    this.bat.visible = true;
+    this.clearHint();
+    for (const cb of this.swingListeners) cb('bat', strength);
+  }
+
   private batSample(x: number, y: number, t: number): void {
     const last = this.path[this.path.length - 1];
     this.path.push({ x, y, t });
+    this.trailPts.push({ x, y, t: performance.now() });
     // Sample along the segment so fast swipes don't skip over objects.
     const steps = Math.max(1, Math.ceil(Math.hypot(x - last.x, y - last.y) / 12));
     const speed = this.speedOf(this.path.slice(-5));
-    if (speed < 0.6) return; // a slow drag isn't a swing
-    const force = Math.min(BAT_MAX_FORCE, speed * BAT_FORCE_PER_SPEED);
+    if (speed < BAT_MIN_SPEED) return; // a slow drag isn't a swing
+    if (Math.hypot(x - this.path[0].x, y - this.path[0].y) > 20) this.swing(x - last.x, y - last.y, Math.min(1, speed / 3));
+    const force = THREE.MathUtils.clamp(speed * BAT_FORCE_PER_SPEED, BAT_MIN_FORCE, BAT_MAX_FORCE);
     for (let i = 1; i <= steps; i++) {
       const sx = last.x + ((x - last.x) * i) / steps;
       const sy = last.y + ((y - last.y) * i) / steps;
-      const hit = this.cast(sx, sy);
+      const hit = this.castFat(sx, sy, i === 1);
       if (!hit || this.struck.has(hit.collider.handle)) continue;
       this.struck.add(hit.collider.handle);
       // Swing direction in world space: the swipe direction across the view, plus some push away.
@@ -211,16 +253,113 @@ export class Tools {
     return { collider: hit.collider, point: p };
   }
 
+  /** Can the bat do anything to this collider? (Breakable, damageable or loose.) */
+  private hittable(c: RAPIER.Collider): boolean {
+    return !!this.o.damage.targetFor(c) || !!c.parent()?.isDynamic();
+  }
+
+  /**
+   * Handles of everything the bat can hit, gathered before a query: Rapier forbids calling back
+   * into the world (e.g. collider.parent()) from inside a query's filter.
+   */
+  private hittableHandles = new Set<number>();
+  private refreshHittable(): void {
+    this.hittableHandles.clear();
+    this.o.physics.world.forEachCollider((c) => {
+      if (this.hittable(c)) this.hittableHandles.add(c.handle);
+    });
+  }
+
+  /**
+   * A forgiving cast for the bat: the exact ray first, then a ball swept along it so a swipe that
+   * passes just beside an object still connects. The desk, walls and floor are ignored.
+   */
+  private castFat(x: number, y: number, refresh = true): { collider: RAPIER.Collider; point: THREE.Vector3 } | null {
+    if (refresh) this.refreshHittable();
+    const exact = this.cast(x, y);
+    if (exact && this.hittable(exact.collider)) return exact;
+    const { rapier, world } = this.o.physics;
+    const o = this.ray.ray.origin;
+    const d = this.ray.ray.direction;
+    const hit = world.castShape(
+      { x: o.x, y: o.y, z: o.z },
+      { x: 0, y: 0, z: 0, w: 1 },
+      { x: d.x, y: d.y, z: d.z },
+      new rapier.Ball(BAT_REACH),
+      0,
+      6,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (c) => this.hittableHandles.has(c.handle),
+    );
+    if (!hit) return null;
+    // Don't reach through solid scenery: the object must be in front of whatever the exact ray hit.
+    if (exact && hit.time_of_impact > exact.point.distanceTo(o) + 0.15) return null;
+    const p = o.clone().addScaledVector(d, hit.time_of_impact + BAT_REACH);
+    return { collider: hit.collider, point: p };
+  }
+
+  /** A looping ghost swipe over the desk, shown when the bat first unlocks, gone after the first swing. */
+  showBatHint(): void {
+    if (this.hint) return;
+    this.hint = document.createElement('div');
+    this.hint.className = 'bat-hint';
+    this.hint.innerHTML = '<i></i>';
+    this.o.stage.appendChild(this.hint);
+  }
+
+  private clearHint(): void {
+    if (!this.hint) return;
+    const h = this.hint;
+    this.hint = null;
+    h.classList.add('gone');
+    setTimeout(() => h.remove(), 600);
+  }
+
+  private drawTrail(): void {
+    const c = this.trail;
+    const now = performance.now();
+    this.trailPts = this.trailPts.filter((p) => now - p.t < TRAIL_MS);
+    const r = this.rect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(r.width * dpr);
+    const h = Math.round(r.height * dpr);
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    const g = c.getContext('2d')!;
+    g.clearRect(0, 0, w, h);
+    const pts = this.trailPts;
+    if (pts.length < 2) return;
+    g.lineCap = 'round';
+    for (let i = 1; i < pts.length; i++) {
+      const k = 1 - (now - pts[i].t) / TRAIL_MS;
+      g.strokeStyle = `rgba(255, 236, 214, ${0.55 * k})`;
+      g.lineWidth = (2 + 10 * k) * dpr;
+      g.beginPath();
+      g.moveTo((pts[i - 1].x - r.left) * dpr, (pts[i - 1].y - r.top) * dpr);
+      g.lineTo((pts[i].x - r.left) * dpr, (pts[i].y - r.top) * dpr);
+      g.stroke();
+    }
+  }
+
   private strike(collider: RAPIER.Collider, point: THREE.Vector3, force: number, dir: THREE.Vector3, tool: ToolName): boolean {
     let hitSomething = false;
+    // Read the body first: breaking the object below can remove it from the world.
+    const parent = collider.parent();
+    const bodyHandle = parent && parent.isDynamic() ? parent.handle : -1;
     const target = this.o.damage.targetFor(collider);
     if (target) {
       this.o.damage.apply(target, point, force);
       hitSomething = true;
     }
     if (this.o.breakables.strike(collider, force, point)) hitSomething = true;
-    const body = collider.parent();
-    if (body && body.isDynamic()) {
+    const body = bodyHandle >= 0 ? this.o.physics.world.getRigidBody(bodyHandle) : null;
+    if (body) {
       const j = dir.clone().multiplyScalar(Math.min(4, force * 0.012) * Math.min(1, body.mass() * 4 + 0.15));
       body.applyImpulseAtPoint({ x: j.x, y: j.y + Math.abs(j.length()) * 0.25, z: j.z }, point, true);
       hitSomething = true;
@@ -234,11 +373,16 @@ export class Tools {
     const down = new THREE.Vector3(0, -1, 0).add(this.ray.ray.direction.clone().multiplyScalar(0.4)).normalize();
     this.strike(collider, point, force, down, 'hammer');
     // Shockwave: loose things nearby fly outward; mugs nearby break.
-    const seen = new Set<number>([collider.handle]);
+    // Collect first, act after: breaking things removes bodies, which Rapier forbids mid-query.
+    const hits: RAPIER.Collider[] = [];
     world.intersectionsWithShape({ x: point.x, y: point.y, z: point.z }, { x: 0, y: 0, z: 0, w: 1 }, new rapier.Ball(HAMMER_RADIUS), (c) => {
-      if (seen.has(c.handle)) return true;
-      seen.add(c.handle);
-      const body = c.parent();
+      if (c.handle !== collider.handle) hits.push(c);
+      return true;
+    });
+    for (const c of hits) {
+      if (world.getCollider(c.handle) !== c) continue; // removed by an earlier break
+      const parent = c.parent();
+      const bodyHandle = parent && parent.isDynamic() ? parent.handle : -1;
       const t = c.translation();
       const out = new THREE.Vector3(t.x - point.x, 0, t.z - point.z);
       const dist = Math.max(0.03, out.length());
@@ -247,17 +391,21 @@ export class Tools {
       const f = force * 0.6 * falloff;
       const target = this.o.damage.targetFor(c);
       if (target && f > 20) this.o.damage.apply(target, new THREE.Vector3(t.x, t.y, t.z), f);
-      this.o.breakables.strike(c, f, new THREE.Vector3(t.x, t.y, t.z));
-      if (body && body.isDynamic()) {
+      if (world.getCollider(c.handle) === c) this.o.breakables.strike(c, f, new THREE.Vector3(t.x, t.y, t.z));
+      const body = bodyHandle >= 0 ? world.getRigidBody(bodyHandle) : null;
+      if (body) {
         const j = out.multiplyScalar(Math.min(3, f * 0.01) * Math.min(1, body.mass() * 4 + 0.15));
         body.applyImpulse({ x: j.x, y: j.y, z: j.z }, true);
       }
-      return true;
-    });
+    }
   }
 
   /** Animates the tool models. */
   update(dt: number): void {
+    if (this.trailPts.length || this.trailDirty) {
+      this.drawTrail();
+      this.trailDirty = this.trailPts.length > 0;
+    }
     this.ring.style.setProperty('--k', String(this.charge));
     if (this.batAnim.t < 1) {
       this.batAnim.t = Math.min(1, this.batAnim.t + dt / 0.2);

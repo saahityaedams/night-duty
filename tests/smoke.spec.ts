@@ -130,6 +130,37 @@ test('bat and hammer break things in the locker and printer views', async ({ pag
   expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
 });
 
+test('after the bat unlocks, taps and slow swipes on the desk connect', async ({ page }) => {
+  await boot(page);
+  const box = (await page.locator('#game').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.08);
+  await page.evaluate(() => window.__nd.arcAdd(6));
+  await page.waitForTimeout(3000);
+  expect((await page.evaluate(() => window.__nd.arc())).tool).toBe('bat');
+  // Taps: a chop at each mug.
+  const mugs = await page.evaluate(() => window.__nd.mugScreenPositions());
+  for (const m of mugs) {
+    await page.mouse.click(box.x + box.width * m.x, box.y + box.height * m.y);
+    await page.waitForTimeout(250);
+  }
+  expect((await page.evaluate(() => window.__nd.strikes)).hit).toBeGreaterThanOrEqual(mugs.length - 1);
+  // A slow swipe (about half a second across) still swings and connects with something.
+  await page.waitForTimeout(2500); // a new round of mugs
+  const before = await page.evaluate(() => window.__nd.strikes.hit);
+  for (const y of [0.66, 0.74, 0.8]) {
+    await page.mouse.move(box.x + box.width * 0.12, box.y + box.height * y);
+    await page.mouse.down();
+    for (let i = 1; i <= 28; i++) {
+      await page.mouse.move(box.x + box.width * (0.12 + i * 0.027), box.y + box.height * y);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
+  expect(await page.evaluate(() => window.__nd.strikes.hit)).toBeGreaterThan(before);
+  expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
+});
+
 test('the whole arc: unlocks, finale, dawn, ending', async ({ page }) => {
   test.setTimeout(90_000);
   await boot(page);

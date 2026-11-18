@@ -147,6 +147,7 @@ export class Arc {
       hud.setTool('bat');
       this.unlockCue();
       await this.reveal('deskWide');
+      if (tools.current === 'bat') tools.showBatHint();
     } else if (this.stage === 'bat' && p >= ARC.revealRight) {
       this.stage = 'right';
       this.revealed.right = true;

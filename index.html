@@ -184,6 +184,62 @@
       .charge-ring.on {
         opacity: 1;
       }
+      /* Bat: the swipe streak, and a ghost swipe shown once when the bat unlocks. */
+      .swipe-trail {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .bat-hint {
+        position: absolute;
+        left: 18%;
+        right: 18%;
+        top: 76%;
+        height: 0;
+        pointer-events: none;
+        transition: opacity 0.5s;
+      }
+      .bat-hint.gone {
+        opacity: 0;
+      }
+      .bat-hint i {
+        position: absolute;
+        top: -9px;
+        left: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(255, 240, 225, 0.85);
+        box-shadow: 0 0 18px rgba(255, 200, 150, 0.7);
+        animation: bathint 1.8s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+      }
+      .bat-hint i::after {
+        content: '';
+        position: absolute;
+        right: 9px;
+        top: 6px;
+        height: 6px;
+        width: 0;
+        border-radius: 3px;
+        background: linear-gradient(90deg, rgba(255, 236, 214, 0), rgba(255, 236, 214, 0.55));
+        animation: bathintstreak 1.8s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+      }
+      @keyframes bathint {
+        0% { left: 0; opacity: 0; transform: scale(0.8); }
+        15% { left: 0; opacity: 1; transform: scale(1); }
+        55% { left: calc(100% - 18px); opacity: 1; }
+        75%, 100% { left: calc(100% - 18px); opacity: 0; }
+      }
+      @keyframes bathintstreak {
+        0%, 15% { width: 0; }
+        50% { width: 120px; }
+        75%, 100% { width: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bat-hint i, .bat-hint i::after { animation-duration: 3.6s; }
+      }
       /* The meter: a thin unlabeled bar along the top edge, like a phone charging. */
       .meter {
         position: absolute;

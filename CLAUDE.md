@@ -53,6 +53,7 @@ Read it with the Claude Docs tools before changing gameplay, art, audio or text.
 - The resting scene is ~150 draw calls. Merge static set dressing (keyboard, papers, room) with baked lighting in milestone 2.
 - Sound one-shots were picked by title and loudness envelope, not by ear. The owner should listen and flag bad ones (`public/audio/`, sources in `CREDITS.md`).
 - The iOS haptic workaround (`Haptics` in `src/game/juice.ts`) is unverified on a real iPhone.
+- Rapier panics ("unreachable", then "recursive use of an object") freeze the whole game. Never call into the world (collider.parent(), removals) from inside a query callback or filter, and re-fetch bodies by handle after anything that can break an object.
 - "Another shift?" fades out and reloads the page (instant from the offline cache) instead of rewinding the room.
 
 ## Visual iteration

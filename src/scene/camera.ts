@@ -22,7 +22,7 @@ export const SHOTS = {
   /** Act 2: leaning back, the whole desk. */
   // Portrait screens hit the vertical FOV cap, so a wider view comes from distance, not FOV.
   // Aimed so the bottom of the frame lands on the desk's front edge, not the floor.
-  deskWide: { position: new THREE.Vector3(0, 1.66, 0.82), target: new THREE.Vector3(0, 1.3, -0.6), hfov: 50 },
+  deskWide: { position: new THREE.Vector3(0, 1.66, 0.6), target: new THREE.Vector3(0, 1.12, -0.55), hfov: 50 },
   /** The locker, back-left, seen from the front. */
   left: { position: new THREE.Vector3(-0.62, 1.42, 0.95), target: new THREE.Vector3(-0.98, 1.0, -0.4), hfov: 48 },
   /** The printer counter and the roster whiteboard, back-right. */
