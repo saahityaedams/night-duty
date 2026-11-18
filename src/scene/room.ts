@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { pbrMaterial } from './textures';
 import { createWindow, type NightWindow } from './window';
+import { createCounter } from './props/furniture';
 
 /**
  * The resident's workstation at 3:47am. Units are metres; +y up, the camera looks toward -z.
@@ -12,8 +13,8 @@ export const ROOM = {
   wallZ: -0.75, // inner face of the back wall
   wallThickness: 0.16,
   desk: { width: 1.5, depth: 0.72, top: 0.76, thickness: 0.028 },
-  window: { left: -0.95, right: 0.95, sill: 0.93, head: 2.1 },
-  rightWallX: 1.15,
+  window: { left: -0.7, right: 0.7, sill: 0.93, head: 2.1 },
+  rightWallX: 1.38,
   leftWallX: -1.35,
 };
 
@@ -30,6 +31,8 @@ export interface Room {
     overhead: THREE.SpotLight;
     windowLight: THREE.RectAreaLight;
     ambient: THREE.HemisphereLight;
+    counterLight: THREE.SpotLight;
+    corridor: THREE.SpotLight;
   };
   colliders: StaticBox[];
   deskCenter: THREE.Vector3;
@@ -133,6 +136,16 @@ export function createRoom(): Room {
   }
   addBox(desk.width - 0.14, 0.32, 0.018, 0, desk.top - desk.thickness - 0.17, wallZ + 0.08, powderCoat, { collide: false });
 
+  // Side counter to the right of the desk, for the printer.
+  {
+    const cw = ROOM.rightWallX - (desk.width / 2 + 0.02);
+    const cd = 0.55;
+    const counter = createCounter(cw, cd, desk.top);
+    counter.position.set(desk.width / 2 + 0.02 + cw / 2, 0, wallZ + cd / 2);
+    group.add(counter);
+    colliders.push({ half: new THREE.Vector3(cw / 2, desk.top / 2, cd / 2), center: new THREE.Vector3(counter.position.x, desk.top / 2, counter.position.z) });
+  }
+
   // --- Lights --------------------------------------------------------------------------------
   // Warm overhead downlight, slightly in front of the desk, the only shadow caster.
   const overhead = new THREE.SpotLight(0xffc28a, 4.6, 5, 0.29, 0.9, 1.6);
@@ -153,6 +166,18 @@ export function createRoom(): Room {
   windowLight.lookAt(winCx, winCy - 0.4, 2);
   group.add(windowLight);
 
+  // A second, dimmer downlight over the side counter: printer and roster whiteboard.
+  const counterLight = new THREE.SpotLight(0xffc58f, 3.2, 4, 0.5, 0.9, 1.6);
+  counterLight.position.set(1.06, 2.35, -0.05);
+  counterLight.target.position.set(1.06, 1.0, -0.62);
+  group.add(counterLight, counterLight.target);
+
+  // Cool fluorescent spill from the corridor door behind her, across the locker.
+  const corridor = new THREE.SpotLight(0xc4d4ff, 4.5, 6, 0.42, 0.85, 1.4);
+  corridor.position.set(-0.55, 1.9, 1.6);
+  corridor.target.position.set(-1.05, 0.95, -0.4);
+  group.add(corridor, corridor.target);
+
   // A whisper of fill so pure-black areas keep a little shape.
   const ambient = new THREE.HemisphereLight(0x1b2230, 0x0b0907, 0.05);
   group.add(ambient);
@@ -160,7 +185,7 @@ export function createRoom(): Room {
   return {
     group,
     window: nightWindow,
-    lights: { overhead, windowLight, ambient },
+    lights: { overhead, windowLight, ambient, counterLight, corridor },
     colliders,
     deskCenter: new THREE.Vector3(0, desk.top, deskCz),
   };

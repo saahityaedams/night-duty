@@ -65,11 +65,12 @@ const fragment = /* glsl */ `
 
   vec3 grade(vec2 uv, vec3 base, vec3 blurred) {
     float d = smoothstep(0.0, 1.0, uDawn);
-    float skyMask = smoothstep(uSkyLine - 0.05, uSkyLine + 0.1, uv.y);
+    float skyMask = smoothstep(uSkyLine - 0.04, uSkyLine + 0.03, uv.y);
     // Night plate: cooler, deeper, horizon glow pulled down to a dull sodium haze.
     float l = lum(base);
     vec3 night = base * vec3(0.55, 0.6, 0.78);
-    night = mix(night, vec3(l) * vec3(0.5, 0.42, 0.4), skyMask * 0.7);
+    // 3:47am: no evening glow left, just a faint dull haze over the city.
+    night = mix(night, vec3(l) * vec3(0.16, 0.15, 0.17) + vec3(0.006, 0.006, 0.009), skyMask * 0.95);
     // Lights: points brighter than their surroundings, lifted so they bloom.
     float lightMask = smoothstep(0.04, 0.2, l - lum(blurred) + max(0.0, l - 0.45));
     night += base * vec3(1.0, 0.85, 0.65) * lightMask * 0.9 * (1.0 - skyMask);
@@ -198,7 +199,7 @@ export function createWindow(width: number, height: number): NightWindow {
       // photo width, undistorted; that band shows the upper city and the skyline.
       // Night plate (lit towers from a high window): rooftops, lit windows and the dark horizon.
       uCrop: { value: new THREE.Vector4(0, 0.08, 1, cropH) },
-      uSkyLine: { value: 0.46 },
+      uSkyLine: { value: 0.44 },
     },
     toneMapped: false,
     fog: false,

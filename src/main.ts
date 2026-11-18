@@ -8,9 +8,11 @@ import { setMaxAnisotropy } from './scene/textures';
 import { createRoom, ROOM } from './scene/room';
 import { createMonitor } from './scene/props/monitor';
 import { createCupMesh, GLAZES, MUG } from './scene/props/cup';
-import { frameCamera } from './scene/camera';
+import { CameraRig, SHOTS, type ShotName } from './scene/camera';
 import { createKeyboard, createMouse, createPaperStack, createCaseFile, createSheet } from './scene/props/deskItems';
 import { createRoomEnvironment } from './scene/environment';
+import { createLocker, createWhiteboard } from './scene/props/furniture';
+import { createPrinter, createTower, createPhone, createAlarmClock } from './scene/props/electronics';
 import { Particles } from './fx/particles';
 import { Breakables } from './game/breakables';
 import { Grab } from './game/grab';
@@ -33,6 +35,8 @@ interface TestHooks {
   audio(): { state: string; loaded: boolean; samples: Record<string, number> };
   /** Sets the window's night-to-dawn grade (0..1), for previews. */
   setDawn(v: number): void;
+  /** Moves the camera to a named shot (seconds = 0 cuts). */
+  shot(name: string, seconds?: number): void;
   /** Normalized screen positions (0..1) of intact mugs' centres. */
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
@@ -57,6 +61,7 @@ const hooks: TestHooks = {
   mugScreenPositions: () => [],
   audio: () => ({ state: 'none', loaded: false, samples: {} }),
   setDawn: () => {},
+  shot: () => {},
   awakeBodies: () => [],
 };
 window.__nd = hooks;
@@ -127,7 +132,38 @@ async function main() {
     add(createMouse(), 0.285, -0.37, -0.12, 0, [0.03, 0.016, 0.056]);
     add(createCaseFile('Ward 4 · Night'), -0.37, -0.53, 0.22, 0, [0.117, 0.004, 0.16]);
     add(createPaperStack(60, 7), -0.33, -0.5, 0.32, 0.0075);
-    add(createSheet('DISCHARGE SUMMARY', 4), 0.3, -0.0, -0.42, 0.0002);
+    add(createSheet('DISCHARGE SUMMARY', 4), 0.3, -0.17, -0.42, 0.0002);
+
+    // Electronics on the desk (static for now; breakable later in milestone 2).
+    const tower = createTower();
+    add(tower.group, -0.6, -0.55, 0.0, 0, [tower.half.x, tower.half.y, tower.half.z]);
+    const phone = createPhone();
+    add(phone.group, 0.36, -0.14, -0.3, 0.0004, [phone.half.x, phone.half.y, phone.half.z]);
+    const clock = createAlarmClock();
+    add(clock.group, 0.37, -0.6, -0.45, 0, [clock.half.x, clock.half.y, clock.half.z]);
+
+    // Locker against the back wall, left of the desk.
+    const locker = createLocker();
+    locker.group.position.set(-1.04, 0, ROOM.wallZ + locker.size.z / 2 + 0.01);
+    scene.add(locker.group);
+    world.createCollider(
+      rapier.ColliderDesc.cuboid(locker.size.x / 2, locker.size.y / 2, locker.size.z / 2).setTranslation(locker.group.position.x, locker.size.y / 2, locker.group.position.z),
+    );
+
+    // Printer on the side counter, roster whiteboard on the wall above it.
+    const printer = createPrinter();
+    const counterX = (ROOM.desk.width / 2 + 0.02 + ROOM.rightWallX) / 2;
+    printer.group.position.set(counterX, ROOM.desk.top, ROOM.wallZ + 0.24);
+    printer.group.rotation.y = -0.15;
+    scene.add(printer.group);
+    world.createCollider(
+      rapier.ColliderDesc.cuboid(printer.half.x, printer.half.y, printer.half.z)
+        .setTranslation(counterX, ROOM.desk.top + printer.half.y, ROOM.wallZ + 0.24)
+        .setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -0.15, 0))),
+    );
+    const board = createWhiteboard();
+    board.group.position.set(counterX, 1.42, ROOM.wallZ + 0.012);
+    scene.add(board.group);
   }
 
   // Particles land on the desk if they're above it, otherwise on the floor.
@@ -233,10 +269,10 @@ async function main() {
 
   // Post-processing and framing.
   const post = createPostPipeline(ctx, scene);
-  ctx.onResize(() => {
-    frameCamera(camera);
-    shake.captureBase();
-  });
+  const rig = new CameraRig(camera);
+  const shotParam = new URLSearchParams(location.search).get('shot');
+  if (shotParam && shotParam in SHOTS) rig.go(shotParam as ShotName, 0);
+  ctx.onResize(() => rig.refresh());
 
   // --- Main loop -----------------------------------------------------------------------------
   const stats = new FrameStats();
@@ -275,6 +311,8 @@ async function main() {
       spawnRound(true);
     }
 
+    rig.update(realDt);
+    shake.captureBase();
     shake.update(realDt);
     room.window.update(timer.getElapsed());
     post.render(realDt);
@@ -323,6 +361,9 @@ async function main() {
   hooks.counts = () => ({ intact: breakables.intactCount, breaks: breakables.breaks, shards: breakables.shardCount });
   hooks.audio = () => audio.info();
   hooks.setDawn = (v) => room.window.setDawn(v);
+  hooks.shot = (name, seconds = 0) => {
+    if (name in SHOTS) rig.go(name as ShotName, seconds);
+  };
   hooks.mugScreenPositions = () => {
     const out: { x: number; y: number }[] = [];
     for (const body of new Set(pickable.values())) {
