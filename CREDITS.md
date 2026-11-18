@@ -60,6 +60,8 @@ Each licence verified on its own Freesound page; cut, trimmed, faded, normalised
 | spark_01 | "electric noise 2.wav" by RutgerMuller, https://freesound.org/people/RutgerMuller/sounds/51269/ |
 | spark_02 | "Spark.wav" by BMacZero, https://freesound.org/people/BMacZero/sounds/94132/ |
 
+| dawn_birds | "City ambiance in the morning in a residential area" by felix.blume, https://freesound.org/people/felix.blume/sounds/667046/ (30s seamless loop) |
+
 ## Window view (rawpixel, CC0 via Openverse)
 
 Re-encoded at 1024px and graded in the window shader (`public/textures/city/`). Both are listed as CC0 on Openverse and as "free public domain CC0" on rawpixel. The rawpixel pages sit behind a bot check, so the licence was confirmed through Openverse.

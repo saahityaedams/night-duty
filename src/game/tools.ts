@@ -41,8 +41,11 @@ const HAMMER_RADIUS = 0.22;
 
 export class Tools {
   current: ToolName = 'hand';
+  /** Finale: every hammer swing lands here, wherever she taps. */
+  scriptedTarget: (() => { collider: RAPIER.Collider; point: THREE.Vector3 } | null) | null = null;
   private readonly listeners: ((e: StrikeEvent) => void)[] = [];
   private readonly swingListeners: ((tool: ToolName, strength: number) => void)[] = [];
+  private readonly landListeners: ((point: THREE.Vector3, force: number, charge: number) => void)[] = [];
   private pointerId = -1;
   private path: { x: number; y: number; t: number }[] = [];
   private struck = new Set<number>();
@@ -80,6 +83,10 @@ export class Tools {
   }
   onSwing(cb: (tool: ToolName, strength: number) => void): void {
     this.swingListeners.push(cb);
+  }
+  /** Fires when a hammer blow lands (after the swing). */
+  onHammerLand(cb: (point: THREE.Vector3, force: number, charge: number) => void): void {
+    this.landListeners.push(cb);
   }
 
   select(tool: ToolName): void {
@@ -136,13 +143,17 @@ export class Tools {
     } else if (this.current === 'hammer') {
       this.ring.classList.remove('on');
       const charge = Math.min(1, (e.timeStamp - this.chargeStart) / 1000 / HAMMER_CHARGE_S);
-      const hit = this.cast(e.clientX, e.clientY);
+      const hit = this.scriptedTarget?.() ?? this.cast(e.clientX, e.clientY);
       if (hit) {
         this.hammerAnim = { t: 0, target: hit.point.clone() };
         this.hammer.visible = true;
         for (const cb of this.swingListeners) cb('hammer', charge);
         // The blow lands at the bottom of the swing.
-        setTimeout(() => this.hammerStrike(hit.point, hit.collider, HAMMER_MIN + (HAMMER_MAX - HAMMER_MIN) * charge), 110);
+        const force = HAMMER_MIN + (HAMMER_MAX - HAMMER_MIN) * charge;
+        setTimeout(() => {
+          this.hammerStrike(hit.point, hit.collider, force);
+          for (const cb of this.landListeners) cb(hit.point, force, charge);
+        }, 110);
       }
     }
   }

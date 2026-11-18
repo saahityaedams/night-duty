@@ -23,6 +23,11 @@ export interface Hud {
   onLook(cb: (dir: 'left' | 'right') => void): void;
   /** Hide everything (finale, dawn). */
   setVisible(v: boolean): void;
+  /** The unlabeled meter, 0..1. */
+  setMeter(v: number): void;
+  setMeterVisible(v: boolean): void;
+  /** Pulse a newly unlocked tool. */
+  markNew(t: ToolName): void;
 }
 
 export function createHud(stage: HTMLElement): Hud {
@@ -61,6 +66,10 @@ export function createHud(stage: HTMLElement): Hud {
     arrows.set(d, b);
   });
   root.appendChild(strip);
+  const meter = document.createElement('div');
+  meter.className = 'meter';
+  meter.appendChild(document.createElement('i'));
+  root.appendChild(meter);
   stage.appendChild(root);
 
   return {
@@ -79,6 +88,18 @@ export function createHud(stage: HTMLElement): Hud {
     onLook: (cb) => lookCbs.push(cb),
     setVisible(v) {
       root.classList.toggle('gone', !v);
+    },
+    setMeter(v) {
+      meter.style.setProperty('--v', String(Math.max(0, Math.min(1, v))));
+    },
+    setMeterVisible(v) {
+      meter.style.opacity = v ? '1' : '0';
+    },
+    markNew(t) {
+      const b = buttons.get(t)!;
+      b.classList.remove('new');
+      void b.offsetWidth;
+      b.classList.add('new');
     },
   };
 }

@@ -43,6 +43,19 @@ export interface ObjectEvent {
 export interface RoomObjects {
   damage: Damage;
   targets: DamageTarget[];
+  /** Phone notification buzzes (for sound). */
+  onBuzz(cb: () => void): void;
+  /** Finale controls. */
+  finale: {
+    /** Everything goes off; the monitor becomes breakable. */
+    start(): void;
+    /** Per-frame frenzy: pop-ups, pending racing, phone vibrating, printer spewing. */
+    update(dt: number): void;
+    /** The dead screen flickers "Pending: 0" once. */
+    pendingZero(): Promise<void>;
+  };
+  popupCount(): number;
+  isBroken(name: string): boolean;
   /** Grabbable dynamic objects (phone, clock), mesh → body. */
   grabbable: Map<THREE.Object3D, RAPIER.RigidBody>;
   monitorTarget: DamageTarget;
@@ -73,6 +86,10 @@ export function createRoomObjects(env: Env): RoomObjects {
   const emit = (e: ObjectEvent) => listeners.forEach((cb) => cb(e));
   const top = ROOM.desk.top;
   const updaters: ((dt: number, time: number) => void)[] = [];
+  const buzzListeners: (() => void)[] = [];
+  let finaleOn = false;
+  let popupsShown = 0;
+  const finaleUpdaters: ((dt: number) => void)[] = [];
 
   const reg = (t: DamageTarget) => {
     const wrapped: DamageTarget = {
@@ -181,12 +198,31 @@ export function createRoomObjects(env: Env): RoomObjects {
     const shown = PHONE_NOTIFICATIONS.slice(0, 4);
     let nextNote = 2.5;
     let alive = true;
+    const vibrate = (strength: number) => {
+      body.applyImpulse({ x: (Math.random() - 0.5) * strength, y: strength * 0.6, z: (Math.random() - 0.5) * strength }, true);
+      body.applyTorqueImpulse({ x: 0, y: (Math.random() - 0.5) * strength * 0.004, z: 0 }, true);
+    };
     updaters.push((_dt, time) => {
-      if (!alive || time < nextNote) return;
+      if (!alive || finaleOn || time < nextNote) return;
       nextNote = time + 3 + Math.random() * 4;
       unread += 1 + Math.floor(Math.random() * 4);
       shown.push(PHONE_NOTIFICATIONS[(shown.length + 3) % PHONE_NOTIFICATIONS.length]);
       phone.draw(unread, shown);
+      // It buzzes, and creeps across the desk a little.
+      for (let i = 0; i < 4; i++) setTimeout(() => alive && vibrate(0.0035), i * 70);
+      buzzListeners.forEach((cb) => cb());
+    });
+    let ft = 0;
+    finaleUpdaters.push((dt) => {
+      if (!alive) return;
+      ft += dt;
+      phone.screenMaterial.emissiveIntensity = 0.35 + 0.45 * (Math.sin(ft * 18) > 0 ? 1 : 0);
+      if (Math.random() < dt * 14) vibrate(0.004);
+      if (Math.random() < dt * 3) {
+        unread += 3;
+        shown.push(PHONE_NOTIFICATIONS[Math.floor(Math.random() * PHONE_NOTIFICATIONS.length)]);
+        phone.draw(unread, shown);
+      }
     });
     const localUv = (p: THREE.Vector3) => {
       const l = phone.group.worldToLocal(p.clone());
@@ -232,7 +268,7 @@ export function createRoomObjects(env: Env): RoomObjects {
     // The LED digits blink, as the doc says.
     let blinkOn = true;
     updaters.push((_dt, time) => {
-      const on = Math.floor(time * 1.6) % 2 === 0;
+      const on = Math.floor(time * (finaleOn ? 9 : 1.6)) % 2 === 0;
       if (on !== blinkOn && clock.digits.opacity !== 0) {
         blinkOn = on;
         clock.digits.color.setScalar(on ? 1.6 : 0.25);
@@ -297,6 +333,15 @@ export function createRoomObjects(env: Env): RoomObjects {
     const col = staticBox(printer.half, pos.clone().setY(top + printer.half.y), -0.15);
     const [body, cassette, sheet, panel] = printer.parts;
     const outlet = () => printer.group.localToWorld(new THREE.Vector3(0, 0.27, 0.05));
+    let spew = 0;
+    finaleUpdaters.push((dt) => {
+      if (damage.isBroken(targets.find((t) => t.name === 'printer')!)) return;
+      spew += dt;
+      if (spew > 0.45) {
+        spew = 0;
+        paper.burst(outlet(), new THREE.Vector3(0, 1.2, 0.4), 3, 1.1);
+      }
+    });
     reg({
       name: 'printer',
       colliders: [col],
@@ -511,6 +556,7 @@ export function createRoomObjects(env: Env): RoomObjects {
 
   // ---------------------------------------------------------------------------------------------
   // Monitor: cracks and pop-ups build with each hit; the glass finally shatters.
+  let pendingZeroImpl: () => Promise<void> = async () => {};
   const monitorTarget = (() => {
     const { monitor, monitorPosition } = env;
     const cols = [
@@ -531,6 +577,52 @@ export function createRoomObjects(env: Env): RoomObjects {
         monitor.ui.draw({ pending, clock: '03:47', popups });
       }
     });
+    let frenzy = 0;
+    let racing = 0;
+    finaleUpdaters.push((dt) => {
+      if (monitor.screenMaterial.emissiveIntensity <= 0) return;
+      frenzy += dt;
+      racing += dt * 9;
+      if (frenzy > 0.18) {
+        frenzy = 0;
+        popups.push(MONITOR_POPUPS[Math.floor(Math.random() * MONITOR_POPUPS.length)]);
+        popupsShown++;
+        if (popups.length > 14) popups.shift();
+      }
+      monitor.ui.draw({ pending: pending + Math.floor(racing), clock: '03:47', popups });
+      monitor.screenMaterial.emissiveIntensity = 0.62 + (Math.random() < 0.08 ? -0.3 : 0);
+    });
+    // "Pending: 0" on the dead panel, behind where the glass was.
+    const zeroTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 1024;
+      c.height = 576;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, 1024, 576);
+      g.fillStyle = '#d9e6f2';
+      g.font = '300 92px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+      g.textAlign = 'center';
+      g.fillText('Pending: 0', 512, 318);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const zeroMat = new THREE.MeshBasicMaterial({ map: zeroTex, color: new THREE.Color(0, 0, 0), toneMapped: false });
+    const zeroPanel = new THREE.Mesh(new THREE.PlaneGeometry(MONITOR.viewW, MONITOR.viewH), zeroMat);
+    zeroPanel.position.copy(screenMesh.position).add(new THREE.Vector3(0, 0, -0.0015));
+    zeroPanel.visible = false;
+    head.add(zeroPanel);
+    pendingZeroImpl = async () => {
+      zeroPanel.visible = true;
+      // A dying panel: a stutter of flickers, one steady moment, then dark.
+      const flick: [number, number][] = [[0.9, 60], [0, 90], [0.6, 40], [0, 220], [1.1, 1300], [0.4, 60], [0, 0]];
+      for (const [v, ms] of flick) {
+        zeroMat.color.setScalar(v);
+        await new Promise((r) => setTimeout(r, ms));
+      }
+      zeroPanel.visible = false;
+    };
     return reg({
       name: 'monitor',
       colliders: cols,
@@ -538,11 +630,14 @@ export function createRoomObjects(env: Env): RoomObjects {
       armour: 16,
       stages: [0.8, 0.6, 0.4, 0.2],
       material: 'glass',
+      // The monitor is the finale. It can crack before then, but it can't give.
+      unbreakable: () => !finaleOn,
       onHit: (hit) => {
         const l = screenMesh.worldToLocal(hit.point.clone());
         cracks.impact(l.x / MONITOR.viewW + 0.5, l.y / MONITOR.viewH + 0.5, Math.min(1, hit.damage / 120));
       },
       onStage: (stage) => {
+        popupsShown += 2;
         popups.push(MONITOR_POPUPS[stage * 2 % MONITOR_POPUPS.length], MONITOR_POPUPS[(stage * 2 + 1) % MONITOR_POPUPS.length]);
         monitor.ui.draw({ pending, clock: '03:47', popups });
       },
@@ -570,6 +665,19 @@ export function createRoomObjects(env: Env): RoomObjects {
     targets,
     grabbable,
     monitorTarget,
+    onBuzz: (cb) => buzzListeners.push(cb),
+    finale: {
+      start: () => {
+        finaleOn = true;
+      },
+      update: (dt) => finaleUpdaters.forEach((u) => u(dt)),
+      pendingZero: () => pendingZeroImpl(),
+    },
+    popupCount: () => popupsShown,
+    isBroken: (name) => {
+      const t = targets.find((x) => x.name === name);
+      return !t || damage.isBroken(t);
+    },
     onEvent: (cb) => listeners.push(cb),
     update: (dt, time) => {
       damage.flush();

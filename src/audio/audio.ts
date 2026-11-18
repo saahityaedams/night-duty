@@ -1,3 +1,5 @@
+import { Score } from './score';
+
 /**
  * Audio engine.
  * - One AudioContext, unlocked on the first touch (required on iPhone; the first touch is the
@@ -30,6 +32,10 @@ export class AudioEngine {
   private loaded = false;
   private clinkTimes: number[] = [];
   private ambienceStarted = false;
+  private rainGain: GainNode | null = null;
+  private humGain: GainNode | null = null;
+  /** Music and finale soundscape; exists after the first touch. */
+  score: Score | null = null;
   muted = false;
 
   /** Call from inside a user gesture (pointerdown). Safe to call repeatedly. */
@@ -38,6 +44,7 @@ export class AudioEngine {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new Ctx({ latencyHint: 'interactive' });
       this.build();
+      this.score = new Score(this.ctx, this.master);
       void this.load();
       document.addEventListener('visibilitychange', () => {
         if (!this.ctx) return;
@@ -183,6 +190,60 @@ export class AudioEngine {
     src.start(t);
   }
 
+  /** A tool unlocking: a low, resonant tone, not a fanfare. */
+  unlockTone(): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    for (const [f, v] of [[98, 0.18], [146.8, 0.1], [196, 0.06]] as [number, number][]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      o.connect(g).connect(this.sfx);
+      o.start(t);
+      o.stop(t + 2.3);
+    }
+  }
+
+  /** The soft tick of a stat counting up. */
+  tick(): void {
+    this.play('clink', 0.05, 2.2 + Math.random() * 0.1, 0);
+  }
+
+  /** The phone buzzing on the desk. */
+  buzz(): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.value = 160;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 420;
+      const g = ctx.createGain();
+      const s = t + i * 0.32;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.12, s + 0.02);
+      g.gain.setValueAtTime(0.12, s + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.24);
+      o.connect(lp).connect(g).connect(this.sfx);
+      o.start(s);
+      o.stop(s + 0.26);
+    }
+  }
+
+  /** Fade everything out (goodnight). */
+  fadeOut(seconds: number): void {
+    if (!this.ctx) return;
+    this.master.gain.setTargetAtTime(0, this.ctx.currentTime, seconds / 3);
+  }
+
   /** A blunt hit on something that doesn't break (the desk, a wall). */
   thud(strength: number): void {
     this.thump(0.3 + strength * 0.6);
@@ -276,6 +337,38 @@ export class AudioEngine {
     this.play('clink', Math.min(0.6, 0.12 + force / 50), 0.75 + Math.random() * 0.15, pan * 0.6);
   }
 
+  /** Rain level 0..1 (fades out at dawn). */
+  setRain(level: number, seconds = 3): void {
+    if (!this.ctx || !this.rainGain) return;
+    this.rainGain.gain.setTargetAtTime(0.55 * level, this.ctx.currentTime, seconds / 3);
+  }
+
+  /** The building's hum stops when the power goes. */
+  setHum(on: boolean): void {
+    if (!this.ctx || !this.humGain) return;
+    this.humGain.gain.setTargetAtTime(on ? 0.012 : 0, this.ctx.currentTime, 0.05);
+  }
+
+  /** Dawn bed: birds and distant traffic (recorded, looped), fading in. */
+  async dawnAmbience(): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}audio/dawn_birds.m4a`);
+      const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 6);
+      src.connect(g).connect(this.ambience);
+      src.start();
+    } catch {
+      /* no dawn bed; the music carries it */
+    }
+  }
+
   // --- Ambience ----------------------------------------------------------------------------
 
   private startAmbience(): void {
@@ -321,6 +414,7 @@ export class AudioEngine {
     lp.frequency.value = 5200;
     const rainGain = ctx.createGain();
     rainGain.gain.value = 0.55;
+    this.rainGain = rainGain;
     rain.connect(bp).connect(lp).connect(rainGain).connect(this.ambience);
     rain.start();
 
@@ -331,6 +425,7 @@ export class AudioEngine {
     hum2.frequency.value = 100;
     const humGain = ctx.createGain();
     humGain.gain.value = 0.012;
+    this.humGain = humGain;
     hum.connect(humGain);
     hum2.connect(humGain);
     humGain.connect(this.ambience);

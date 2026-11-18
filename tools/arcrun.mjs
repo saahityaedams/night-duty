@@ -1,0 +1,23 @@
+import { chromium, devices } from '@playwright/test';
+const out = process.argv[2];
+const b = await chromium.launch({ channel: 'chrome', args: ['--mute-audio'] });
+const p = await b.newPage({ ...devices['Pixel 7'] });
+const logs = []; p.on('pageerror', e => logs.push(String(e))); p.on('console', m => m.type() === 'error' && logs.push(m.text()));
+await p.goto('http://localhost:5173/');
+await p.waitForFunction(() => window.__nd?.ready);
+await p.waitForTimeout(1200);
+const box = await p.locator('#game').boundingBox();
+const shot = async (name) => { await p.screenshot({ path: `${out}_${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.__nd.arc()))); };
+await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.08); // first touch: unlock audio
+await shot('0warm');
+await p.evaluate(() => window.__nd.arcAdd(6)); await p.waitForTimeout(2600); await shot('1bat');
+await p.evaluate(() => window.__nd.arcAdd(7)); await p.waitForTimeout(2600); await shot('2right');
+await p.evaluate(() => window.__nd.arcAdd(8)); await p.waitForTimeout(2600); await shot('3hammer');
+await p.evaluate(() => window.__nd.arcAdd(20)); await p.waitForTimeout(2200); await shot('4finale');
+await p.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.8); await p.mouse.down(); await p.waitForTimeout(950); await p.mouse.up();
+await p.waitForTimeout(500); await shot('5impact');
+await p.waitForTimeout(4200); await shot('6zero');
+await p.waitForTimeout(6000); await shot('7dawn');
+await p.waitForTimeout(14000); await shot('8ending');
+console.log('errors', JSON.stringify(logs.slice(0, 5)));
+await b.close();

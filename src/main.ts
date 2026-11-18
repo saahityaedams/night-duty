@@ -17,6 +17,8 @@ import { PEN_JAR, createPens, glassJarMaterial, glassEdgeMaterial } from './scen
 import { detachParts } from './game/damage';
 import { Tools } from './game/tools';
 import { createHud } from './ui/hud';
+import { Arc } from './game/arc';
+import { Stats } from './game/stats';
 import { Particles } from './fx/particles';
 import { Breakables } from './game/breakables';
 import { Grab } from './game/grab';
@@ -45,6 +47,9 @@ interface TestHooks {
   hitObject(name: string, force: number): boolean;
   /** Names of room objects and whether each is broken. */
   objects(): { name: string; broken: boolean }[];
+  /** Arc stage and progress; arcAdd pushes progress (skipping ahead in tests). */
+  arc(): { stage: string; progress: number; shot: string; tool: string };
+  arcAdd(points: number): void;
   /** Normalized screen positions (0..1) of intact mugs' centres. */
   mugScreenPositions(): { x: number; y: number }[];
   /** Positions and speeds of awake bodies, for diagnosing bodies that never settle. */
@@ -72,6 +77,8 @@ const hooks: TestHooks = {
   shot: () => {},
   hitObject: () => false,
   objects: () => [],
+  arc: () => ({ stage: '', progress: 0, shot: '', tool: '' }),
+  arcAdd: () => {},
   awakeBodies: () => [],
 };
 window.__nd = hooks;
@@ -313,7 +320,6 @@ async function main() {
   const tools = new Tools({ camera, scene, element: canvas, stage, physics, damage: objects.damage, breakables });
   const hud = createHud(stage);
   hud.setTool('hand');
-  hud.setTools(['hand', 'bat', 'hammer']); // the arc will unlock these progressively
   const selectTool = (t: 'hand' | 'bat' | 'hammer') => {
     tools.select(t);
     hud.setTool(t);
@@ -332,14 +338,33 @@ async function main() {
     }
     if (!e.hitSomething) audio.thud(Math.min(1, e.force / 300));
   });
-  // Looking around: left (locker) ← desk → right (printer and roster).
-  const updateArrows = () => hud.setArrows(rig.current !== 'left', rig.current !== 'right');
-  hud.onLook((dir) => {
-    const next = dir === 'left' ? (rig.current === 'right' ? 'desk' : 'left') : rig.current === 'left' ? 'desk' : 'right';
-    rig.go(next, 1.1);
-    updateArrows();
+  objects.onBuzz(() => audio.buzz());
+
+  // The session arc owns unlocks, reveals, the meter, the finale, dawn and the ending.
+  let refill = true;
+  const arc = new Arc({
+    rig,
+    hud,
+    tools,
+    audio,
+    objects,
+    breakables,
+    physics,
+    room,
+    monitor,
+    post,
+    timefx,
+    shake,
+    haptics,
+    stats: new Stats(),
+    particles,
+    paper,
+    stage,
+    setRefill: (on) => (refill = on),
+    intactMugs: () => [...new Set(pickable.values())].filter((b) => breakables.isIntact(b)),
   });
-  updateArrows();
+  const params = new URLSearchParams(location.search);
+  if (params.get('all') === '1' || shotName) arc.unlockAll();
 
   // --- Main loop -----------------------------------------------------------------------------
   const stats = new FrameStats();
@@ -375,13 +400,14 @@ async function main() {
         appearing.splice(i, 1);
       }
     }
-    if (respawnAt && now > respawnAt) {
+    if (respawnAt && now > respawnAt && refill) {
       respawnAt = 0;
       spawnRound(true);
     }
 
     rig.update(realDt);
     tools.update(realDt);
+    arc.update(dt);
     shake.captureBase();
     shake.update(realDt);
     room.window.update(timer.getElapsed());
@@ -441,6 +467,8 @@ async function main() {
     objects.damage.apply(t, new THREE.Vector3(c.x + (Math.random() - 0.5) * 0.04, c.y + (Math.random() - 0.5) * 0.04, c.z + 0.05), force);
     return true;
   };
+  hooks.arc = () => ({ stage: arc.stage, progress: arc.progress, shot: rig.current, tool: tools.current });
+  hooks.arcAdd = (p) => arc.add(p);
   hooks.objects = () => objects.targets.map((t) => ({ name: t.name, broken: objects.damage.isBroken(t) }));
   hooks.shot = (name, seconds = 0) => {
     if (name in SHOTS) rig.go(name as ShotName, seconds);

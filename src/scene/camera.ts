@@ -27,6 +27,8 @@ export const SHOTS = {
   left: { position: new THREE.Vector3(-0.62, 1.42, 0.95), target: new THREE.Vector3(-0.98, 1.0, -0.4), hfov: 48 },
   /** The printer counter and the roster whiteboard, back-right. */
   right: { position: new THREE.Vector3(0.45, 1.5, 0.8), target: new THREE.Vector3(1.1, 1.12, -0.6), hfov: 54 },
+  /** Dawn: pulled back and a little higher, the whole wrecked desk and the sunrise. */
+  dawn: { position: new THREE.Vector3(0, 1.72, 1.0), target: new THREE.Vector3(0, 1.28, -0.6), hfov: 50 },
   /** Finale: square on the workstation, a little lower and closer, for the last swing. */
   finale: { position: new THREE.Vector3(0, 1.3, 0.2), target: new THREE.Vector3(0, 1.02, -0.55), hfov: 44 },
 } satisfies Record<string, Shot>;

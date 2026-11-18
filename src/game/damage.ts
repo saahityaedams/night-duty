@@ -28,6 +28,8 @@ export interface DamageTarget {
   /** Health fractions (descending) at which `onStage` fires, e.g. [0.66, 0.33]. */
   stages?: number[];
   material: MaterialKind;
+  /** While this returns true the target can be damaged but not broken (health floors at 1). */
+  unbreakable?: () => boolean;
   onHit?(hit: HitInfo, target: DamageTarget): void;
   onStage?(stage: number, hit: HitInfo, target: DamageTarget): void;
   onBreak(hit: HitInfo, target: DamageTarget): void;
@@ -98,6 +100,7 @@ export class Damage {
       const { t, hit } = this.pending.shift()!;
       if (t.broken || hit.damage <= 0) continue;
       t.health -= hit.damage;
+      if (t.health <= 0 && t.unbreakable?.()) t.health = 1;
       t.onHit?.(hit, t);
       const frac = Math.max(0, t.health) / t.maxHealth;
       while (t.stages && t.stageIndex < t.stages.length && frac <= t.stages[t.stageIndex]) {

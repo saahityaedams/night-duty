@@ -170,6 +170,185 @@
       .charge-ring.on {
         opacity: 1;
       }
+      /* The meter: a thin unlabeled bar along the top edge, like a phone charging. */
+      .meter {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 6px);
+        left: 18%;
+        right: 18%;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        pointer-events: none;
+        transition: opacity 0.6s;
+      }
+      .meter i {
+        position: absolute;
+        inset: 0;
+        transform-origin: left;
+        transform: scaleX(var(--v, 0));
+        background: linear-gradient(90deg, rgba(255, 240, 220, 0.75), rgba(255, 190, 120, 0.95));
+        box-shadow: 0 0 10px rgba(255, 190, 120, calc(var(--v, 0) * 0.8));
+        transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .tool.new {
+        animation: newtool 1.4s ease-in-out 3;
+      }
+      @keyframes newtool {
+        50% {
+          box-shadow: 0 0 0 6px rgba(255, 200, 140, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+        }
+      }
+
+      /* --- Ending ----------------------------------------------------------------------------- */
+      .ending {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 40px);
+        color: #f3eee6;
+        font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0) 30%, rgba(8, 6, 5, 0.72) 75%);
+        pointer-events: none;
+      }
+      .ending.on {
+        display: flex;
+      }
+      .ending .stats {
+        transition: opacity 1.2s;
+      }
+      .ending .stats.dim {
+        opacity: 0.35;
+      }
+      .ending .row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 17px;
+        font-weight: 300;
+        letter-spacing: 0.01em;
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        opacity: 0;
+        transform: translateY(6px);
+        transition:
+          opacity 0.7s,
+          transform 0.7s;
+      }
+      .ending .row.in {
+        opacity: 1;
+        transform: none;
+      }
+      .ending .row .value {
+        font-variant-numeric: tabular-nums;
+        font-weight: 400;
+      }
+      .ending .row.last {
+        border: 0;
+        margin-top: 22px;
+        font-size: 26px;
+        font-weight: 300;
+      }
+      .ending .message {
+        margin-top: 28px;
+        font-size: 18px;
+        line-height: 1.5;
+        font-weight: 300;
+        white-space: pre-line;
+        opacity: 0;
+        transition: opacity 2s;
+      }
+      .ending .message.in {
+        opacity: 1;
+      }
+      .ending .signature {
+        margin-top: 12px;
+        opacity: 0.7;
+      }
+      .ending .choices {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+        opacity: 0;
+        transition: opacity 1s;
+        pointer-events: auto;
+      }
+      .ending .choices.in {
+        opacity: 1;
+      }
+      .ending .choice {
+        flex: 1;
+        min-height: 50px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+        color: #f3eee6;
+        font: inherit;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      .ending .choice.primary {
+        background: rgba(255, 236, 214, 0.9);
+        color: #1a1410;
+        border-color: transparent;
+      }
+      .ending .hint {
+        margin-top: 14px;
+        font-size: 12px;
+        line-height: 1.4;
+        opacity: 0;
+        color: rgba(243, 238, 230, 0.55);
+        transition: opacity 1.4s;
+      }
+      .ending .hint.in {
+        opacity: 1;
+      }
+      .ending.night {
+        justify-content: center;
+        align-items: center;
+        background: rgba(2, 2, 3, 0.97);
+        transition: background 3s;
+      }
+      .goodnight {
+        font-size: 22px;
+        font-weight: 300;
+        letter-spacing: 0.04em;
+        opacity: 0;
+        transition: opacity 3s;
+      }
+      .goodnight.in {
+        opacity: 0.85;
+      }
+      .blackout {
+        position: absolute;
+        inset: 0;
+        background: #000;
+        opacity: 0;
+        transition: opacity 0.9s;
+        pointer-events: none;
+      }
+      .blackout.in {
+        opacity: 1;
+      }
+      .returning {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(env(safe-area-inset-top, 0px) + 22px);
+        text-align: center;
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px;
+        font-weight: 300;
+        color: rgba(243, 238, 230, 0.7);
+        opacity: 0;
+        transition: opacity 1.5s;
+        pointer-events: none;
+      }
+      .returning.in {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>

@@ -64,12 +64,16 @@ export class PaperStorm {
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
 
+  /** Total sheets ever thrown out (for the stats). */
+  total = 0;
+
   get landed(): number {
     return this.landedCount;
   }
 
   /** A burst of `count` sheets from `at`, thrown with `vel` plus a spread. */
   burst(at: THREE.Vector3, vel: THREE.Vector3, count: number, spread = 1.6): void {
+    this.total += count;
     for (let i = 0; i < count; i++) {
       const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.9 + 0.3, Math.random() - 0.5).normalize();
       const sheet: Sheet = {

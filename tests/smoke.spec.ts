@@ -126,3 +126,35 @@ test('bat and hammer break things in the locker and printer views', async ({ pag
   expect(broken).toContain('printer');
   expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
 });
+
+test('the whole arc: unlocks, finale, dawn, ending', async ({ page }) => {
+  test.setTimeout(90_000);
+  await boot(page);
+  const box = (await page.locator('#game').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.08);
+  const arc = () => page.evaluate(() => window.__nd.arc());
+  expect((await arc()).stage).toBe('warmup');
+  await page.evaluate(() => window.__nd.arcAdd(6));
+  await expect.poll(async () => (await arc()).stage).toBe('bat');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => window.__nd.arcAdd(7));
+  await expect.poll(async () => (await arc()).shot, { timeout: 5000 }).toBe('right');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => window.__nd.arcAdd(8));
+  await expect.poll(async () => (await arc()).tool, { timeout: 5000 }).toBe('hammer');
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => window.__nd.arcAdd(20));
+  await expect.poll(async () => (await arc()).stage).toBe('finale');
+  await page.waitForTimeout(2000);
+  // Hold and release anywhere: the hammer lands on the monitor.
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.8);
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  await expect.poll(async () => (await page.evaluate(() => window.__nd.objects())).find((o) => o.name === 'monitor')?.broken, { timeout: 5000 }).toBe(true);
+  await expect.poll(async () => (await arc()).stage, { timeout: 15_000 }).toBe('dawn');
+  await expect.poll(async () => (await arc()).stage, { timeout: 15_000 }).toBe('ending');
+  await expect(page.locator('.ending .choice.primary')).toBeVisible({ timeout: 25_000 });
+  await page.screenshot({ path: `test-results/screens/ending-${test.info().project.name}.png` });
+  expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
+});
