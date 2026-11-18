@@ -18,7 +18,8 @@ test('boots without errors and renders the scene', async ({ page }, info) => {
   const stats = await page.evaluate(() => window.__nd.stats());
   expect(stats.frames).toBeGreaterThan(10);
   expect(stats.drawCalls).toBeGreaterThan(20);
-  expect((await page.evaluate(() => window.__nd.counts())).intact).toBe(3);
+  // Three mugs and the glass pen jar.
+  expect((await page.evaluate(() => window.__nd.counts())).intact).toBe(4);
   await page.screenshot({ path: `test-results/screens/boot-${info.project.name}.png` });
   expect(await page.evaluate(() => window.__nd.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
@@ -36,7 +37,7 @@ test('flicking a mug at the monitor breaks it', async ({ page }, info) => {
   await page.screenshot({ path: `test-results/screens/flick-${info.project.name}.png` });
   const c = await page.evaluate(() => window.__nd.counts());
   expect(c.shards).toBeGreaterThan(4);
-  expect(c.intact).toBe(2);
+  expect(c.intact).toBe(3);
 });
 
 test('a quick tap knocks a mug without grabbing it for long', async ({ page }) => {
@@ -53,7 +54,7 @@ test('a quick tap knocks a mug without grabbing it for long', async ({ page }) =
 test('shards come to rest and a new round of mugs appears', async ({ page }, info) => {
   await boot(page);
   const n = await page.evaluate(() => window.__nd.breakAll(200));
-  expect(n).toBe(3);
+  expect(n).toBe(4); // three mugs and the pen jar
   // All debris must fall asleep so it stops costing CPU.
   await expect
     .poll(async () => (await page.evaluate(() => window.__nd.stats())).activeBodies, { timeout: 15_000, intervals: [500] })

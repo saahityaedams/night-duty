@@ -26,7 +26,8 @@ Read it with the Claude Docs tools before changing gameplay, art, audio or text.
 - `npm run typecheck`
 - `npm test`: Playwright in WebKit (iPhone 15 Pro emulation) and installed Chrome (Pixel 7). Screenshots go to `test-results/screens/`.
 - `npm run blender -- <script.py> -- <args>`: headless Blender 5.3 for the asset pipeline (`tools/blender/`)
-- `npm run deploy:preview`: build and deploy to the Cloudflare preview Worker (`wrangler.jsonc`). Needs `npx wrangler login` once.
+- `npm run ship`: typecheck, run every test, and deploy only if all pass. **Always deploy with this**, never `deploy:preview` directly.
+- `npm run deploy:preview`: build and deploy to the Cloudflare Worker (`wrangler.jsonc`) without tests. Needs `npx wrangler login` once.
 
 ## Architecture
 

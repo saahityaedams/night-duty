@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "blender": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python",
-    "deploy:preview": "npm run build && wrangler deploy"
+    "deploy:preview": "npm run build && wrangler deploy",
+    "ship": "npm run typecheck && playwright test && npm run deploy:preview"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
